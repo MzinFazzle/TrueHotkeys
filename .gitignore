@@ -1,0 +1,8 @@
+.vs/
+build/
+install/
+out/
+.cache/
+CMakeUserPresets.json
+*.dll
+*.pdb

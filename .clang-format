@@ -1,0 +1,16 @@
+---
+# This file is optional but helps keep a consistent code style.
+#
+# To use it, configure your IDE/editor to use "clang-format"
+# (install LLVM to get the clang-format binary, and add it to PATH).
+#
+UseTab: Never
+TabWidth: '4'
+IndentWidth: '4'
+BasedOnStyle: Google
+AccessModifierOffset: -4
+ColumnLimit: 120
+NamespaceIndentation: All
+IndentPPDirectives: BeforeHash
+FixNamespaceComments: false
+...

@@ -11108,7 +11108,6 @@ namespace ImGuiMCP {
         return func(table, pixels, x, y, w, h, stride);
     }
 
-    /////////////////////////////manual written functions
     inline void LogText(CONST char* fmt, ...) {
         using func_t = void (*)(const char*, va_list);
         func_t func = GetMenuFrameworkFunction<func_t>("igLogTextV");

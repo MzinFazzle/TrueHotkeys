@@ -28,6 +28,7 @@ namespace Hotkeys {
         std::optional<FormRef> m_left;
         std::optional<FormRef> m_ammo;
         bool m_addIfMissing;
+
     };
 
     class OutfitAction final : public IHotkeyAction {
@@ -42,6 +43,8 @@ namespace Hotkeys {
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kOutfit; }
         [[nodiscard]] std::string GetDisplayName() const override;
         void Execute(RE::Actor* a_actor) const override;
+        [[nodiscard]] bool SupportsUndo() const noexcept override { return true; }
+        void Undo(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override;
 
     private:
@@ -125,8 +128,6 @@ namespace Hotkeys {
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kToggleTorch; }
         [[nodiscard]] std::string GetDisplayName() const override;
         void Execute(RE::Actor* a_actor) const override;
-        [[nodiscard]] bool SupportsUndo() const noexcept override { return true; }
-        void Undo(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override;
 
     private:

@@ -218,13 +218,8 @@ namespace Hotkeys {
         }
 
         static constexpr std::array kBlockingMenus = {
-            RE::Console::MENU_NAME,
-            RE::DialogueMenu::MENU_NAME,
-            RE::LoadingMenu::MENU_NAME,
-            RE::MainMenu::MENU_NAME,
-            RE::CraftingMenu::MENU_NAME,
-            RE::RaceSexMenu::MENU_NAME,
-            RE::InventoryMenu::MENU_NAME,
+            RE::Console::MENU_NAME,     RE::DialogueMenu::MENU_NAME, RE::LoadingMenu::MENU_NAME,
+            RE::MainMenu::MENU_NAME,    RE::CraftingMenu::MENU_NAME, RE::RaceSexMenu::MENU_NAME,
         };
         for (auto menuName : kBlockingMenus) {
             if (ui->IsMenuOpen(menuName)) {
@@ -234,9 +229,9 @@ namespace Hotkeys {
 
         if (!m_settings.allowHotkeysInGameMenus) {
             static constexpr std::array kPausingMenus = {
-                RE::MagicMenu::MENU_NAME,     RE::FavoritesMenu::MENU_NAME, RE::ContainerMenu::MENU_NAME,
-                RE::BarterMenu::MENU_NAME,    RE::MapMenu::MENU_NAME,       RE::JournalMenu::MENU_NAME,
-                RE::BookMenu::MENU_NAME,
+                RE::MagicMenu::MENU_NAME,  RE::FavoritesMenu::MENU_NAME, RE::ContainerMenu::MENU_NAME,
+                RE::BarterMenu::MENU_NAME, RE::MapMenu::MENU_NAME,       RE::JournalMenu::MENU_NAME,
+                RE::BookMenu::MENU_NAME,   RE::InventoryMenu::MENU_NAME,
             };
             for (auto menuName : kPausingMenus) {
                 if (ui->IsMenuOpen(menuName)) {
@@ -272,6 +267,14 @@ namespace Hotkeys {
         actions.reserve(it->second->actions.size());
         for (const auto& action : it->second->actions) {
             actions.push_back(action.get());
+        }
+
+        for (auto it2 = m_activeToggleBinds.begin(); it2 != m_activeToggleBinds.end();) {
+            if (*it2 == a_key) {
+                ++it2;
+            } else {
+                it2 = m_activeToggleBinds.erase(it2);
+            }
         }
 
         bool canToggle = m_settings.toggleUnequip &&

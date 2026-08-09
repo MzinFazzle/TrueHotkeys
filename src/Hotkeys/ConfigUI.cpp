@@ -200,7 +200,7 @@ namespace Hotkeys {
             const auto& plugins = a_picker.catalog.plugins;
             auto pluginIt = std::find(plugins.begin(), plugins.end(), parsed->plugin);
             if (pluginIt == plugins.end()) {
-                return;  // leave unset, user re-picks
+                return;  // this plugin has none of this action type's forms (or isn't loaded) - leave unset, user re-picks
             }
             a_picker.pluginIndex = static_cast<int>(std::distance(plugins.begin(), pluginIt));
 

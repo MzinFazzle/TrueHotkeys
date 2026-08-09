@@ -9,9 +9,7 @@
 #include <utility>
 
 namespace Hotkeys {
-
     namespace {
-
         [[nodiscard]] RE::BGSEquipSlot* GetLeftHandSlot() {
             auto* objManager = RE::BGSDefaultObjectManager::GetSingleton();
             return objManager ? objManager->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kLeftHandEquip) : nullptr;
@@ -39,6 +37,17 @@ namespace Hotkeys {
             }
         }
 
+        [[nodiscard]] bool IsWorn(RE::Actor* a_actor, RE::TESBoundObject* a_object) {
+            auto owned = a_actor->GetInventory([a_object](RE::TESBoundObject& a_obj) { return &a_obj == a_object; });
+            for (auto& [item, entry] : owned) {
+                auto& [count, data] = entry;
+                if (data && data->IsWorn()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         [[nodiscard]] bool GrantIfAllowed(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool a_addIfMissing) {
             if (a_addIfMissing) {
                 GrantIfMissing(a_actor, a_object);
@@ -56,9 +65,9 @@ namespace Hotkeys {
             }
         }
 
-        void UnequipBound(RE::ActorEquipManager* a_equipManager, RE::Actor* a_actor, RE::TESBoundObject* a_object) {
-            a_equipManager->UnequipObject(a_actor, a_object, nullptr, 1, nullptr, true, true, true, true);
-        }
+        void UnequipItemViaPapyrus(RE::Actor* a_actor, RE::TESBoundObject* a_item);
+
+        void UnequipBound(RE::Actor* a_actor, RE::TESBoundObject* a_object) { UnequipItemViaPapyrus(a_actor, a_object); }
 
         void EquipItemViaPapyrus(RE::Actor* a_actor, RE::TESBoundObject* a_item) {
             if (!a_actor || !a_item) {
@@ -76,9 +85,30 @@ namespace Hotkeys {
             if (handle == handlePolicy->EmptyHandle()) {
                 return;
             }
-            auto* args = RE::MakeFunctionArguments(static_cast<RE::TESForm*>(a_item), false, false);
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::TESForm*>(a_item), false, true);
             RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
             vm->DispatchMethodCall2(handle, "Actor", "EquipItem", args, callback);
+        }
+
+        void UnequipItemViaPapyrus(RE::Actor* a_actor, RE::TESBoundObject* a_item) {
+            if (!a_actor || !a_item) {
+                return;
+            }
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm) {
+                return;
+            }
+            auto* handlePolicy = vm->GetObjectHandlePolicy();
+            if (!handlePolicy) {
+                return;
+            }
+            auto handle = handlePolicy->GetHandleForObject(a_actor->GetFormType(), a_actor);
+            if (handle == handlePolicy->EmptyHandle()) {
+                return;
+            }
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::TESForm*>(a_item), false, true);
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
+            vm->DispatchMethodCall2(handle, "Actor", "UnequipItem", args, callback);
         }
 
         void EquipBoundViaPapyrus(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool a_addIfMissing) {
@@ -108,7 +138,8 @@ namespace Hotkeys {
             if (handle == handlePolicy->EmptyHandle()) {
                 return;
             }
-            auto* args = RE::MakeFunctionArguments(static_cast<RE::TESForm*>(a_item), static_cast<std::int32_t>(a_equipSlot), false, false);
+            auto* args = RE::MakeFunctionArguments(
+                static_cast<RE::TESForm*>(a_item), static_cast<std::int32_t>(a_equipSlot), false, false);
             RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
             vm->DispatchMethodCall2(handle, "Actor", "EquipItemEx", args, callback);
         }
@@ -193,8 +224,50 @@ namespace Hotkeys {
             vm->DispatchStaticCall("Game", "TeachWord", args, callback);
         }
 
-        void GrantShoutIfMissing(RE::Actor* a_actor, RE::TESShout* a_shout) {
+        void EquipShoutViaPapyrus(RE::Actor* a_actor, RE::TESShout* a_shout) {
+            if (!a_actor) {
+                return;
+            }
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm) {
+                return;
+            }
+            auto* handlePolicy = vm->GetObjectHandlePolicy();
+            if (!handlePolicy) {
+                return;
+            }
+            auto handle = handlePolicy->GetHandleForObject(a_actor->GetFormType(), a_actor);
+            if (handle == handlePolicy->EmptyHandle()) {
+                return;
+            }
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::TESShout*>(a_shout));
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
+            vm->DispatchMethodCall2(handle, "Actor", "EquipShout", args, callback);
+        }
+
+        void UnequipShoutViaPapyrus(RE::Actor* a_actor, RE::TESShout* a_shout) {
             if (!a_actor || !a_shout) {
+                return;
+            }
+            auto* vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+            if (!vm) {
+                return;
+            }
+            auto* handlePolicy = vm->GetObjectHandlePolicy();
+            if (!handlePolicy) {
+                return;
+            }
+            auto handle = handlePolicy->GetHandleForObject(a_actor->GetFormType(), a_actor);
+            if (handle == handlePolicy->EmptyHandle()) {
+                return;
+            }
+            auto* args = RE::MakeFunctionArguments(static_cast<RE::TESShout*>(a_shout));
+            RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback;
+            vm->DispatchMethodCall2(handle, "Actor", "UnequipShout", args, callback);
+        }
+
+        void GrantShoutIfMissing(RE::Actor* a_actor, RE::TESShout* a_shout) {
+            if (!a_actor || !a_shout || a_shout->GetKnown()) {
                 return;
             }
             for (auto& variation : a_shout->variations) {
@@ -216,16 +289,12 @@ namespace Hotkeys {
         }
 
         void UnequipHand(RE::Actor* a_actor, bool a_leftHand) {
-            auto* equipManager = RE::ActorEquipManager::GetSingleton();
-            if (!equipManager) {
-                return;
-            }
             auto* equipped = a_actor->GetEquippedObject(a_leftHand);
             if (!equipped) {
                 return;
             }
             if (auto* bound = equipped->As<RE::TESBoundObject>()) {
-                UnequipBound(equipManager, a_actor, bound);
+                UnequipBound(a_actor, bound);
             }
         }
 
@@ -233,37 +302,32 @@ namespace Hotkeys {
             UnequipHand(a_actor, false);
             UnequipHand(a_actor, true);
         }
-
         void UnequipAllSpells(RE::Actor* a_actor) {
             ClearHandSpellIfAny(a_actor, false);
             ClearHandSpellIfAny(a_actor, true);
         }
-
         void UnequipAllShouts(RE::Actor* a_actor, RE::ActorEquipManager* a_equipManager) {
             a_equipManager->EquipShout(a_actor, nullptr);
         }
-
-        void UnequipAllArmor(RE::Actor* a_actor, RE::ActorEquipManager* a_equipManager) {
+        void UnequipAllArmor(RE::Actor* a_actor) {
             auto inventory = a_actor->GetInventory([](RE::TESBoundObject& a_obj) { return a_obj.Is(RE::FormType::Armor); });
             for (auto& [item, entry] : inventory) {
                 auto& [count, data] = entry;
                 if (data && data->IsWorn()) {
-                    UnequipBound(a_equipManager, a_actor, item);
+                    UnequipBound(a_actor, item);
                 }
             }
         }
-
-        void UnequipAllAmmo(RE::Actor* a_actor, RE::ActorEquipManager* a_equipManager) {
+        void UnequipAllAmmo(RE::Actor* a_actor) {
             if (auto* ammo = a_actor->GetCurrentAmmo()) {
-                UnequipBound(a_equipManager, a_actor, ammo);
+                UnequipBound(a_actor, ammo);
             }
         }
-        
         void UnequipEverything(RE::Actor* a_actor, RE::ActorEquipManager* a_equipManager) {
             UnequipAllWeapons(a_actor);
             UnequipAllSpells(a_actor);
             UnequipAllShouts(a_actor, a_equipManager);
-            UnequipAllArmor(a_actor, a_equipManager);
+            UnequipAllArmor(a_actor);
         }
 
         [[nodiscard]] std::string SerializeField(std::string_view a_key, const FormRef& a_ref) {
@@ -351,16 +415,31 @@ namespace Hotkeys {
             return;
         }
 
+        auto* rightBound = m_right ? m_right->Resolve<RE::TESBoundObject>() : nullptr;
+        auto* leftBound = m_left ? m_left->Resolve<RE::TESBoundObject>() : nullptr;
+        auto* liveRightEquipped = a_actor->GetEquippedObject(false);
+        auto* liveRightBound = liveRightEquipped ? liveRightEquipped->As<RE::TESBoundObject>() : nullptr;
+        auto* liveLeftEquipped = a_actor->GetEquippedObject(true);
+        auto* liveLeftBound = liveLeftEquipped ? liveLeftEquipped->As<RE::TESBoundObject>() : nullptr;
+        bool rightAlreadyCorrect = rightBound && liveRightBound == rightBound;
+        bool leftAlreadyCorrect = leftBound && liveLeftBound == leftBound;
+
+        bool leftMirrorsRightTwoHanded = (m_right && !m_left) && liveRightBound && liveLeftBound == liveRightBound;
+
         ClearHandSpellIfAny(a_actor, false);
         ClearHandSpellIfAny(a_actor, true);
-        UnequipHand(a_actor, false);
-        UnequipHand(a_actor, true);
+        if (!(m_right && !m_left) && !rightAlreadyCorrect) {
+            UnequipHand(a_actor, false);
+        }
+        if (!leftAlreadyCorrect && !leftMirrorsRightTwoHanded) {
+            UnequipHand(a_actor, true);
+        }
 
         std::optional<FormRef> right = m_right;
         std::optional<FormRef> left = m_left;
         std::optional<FormRef> ammo = m_ammo;
         bool addIfMissing = m_addIfMissing;
-        SKSE::GetTaskInterface()->AddTask([right, left, ammo, addIfMissing]() {
+        SKSE::GetTaskInterface()->AddTask([right, left, ammo, addIfMissing, rightAlreadyCorrect, leftAlreadyCorrect]() {
             auto* actor = RE::PlayerCharacter::GetSingleton();
             if (!actor) {
                 return;
@@ -368,22 +447,24 @@ namespace Hotkeys {
 
             if (right && left) {
                 if (auto* boundRight = right->Resolve<RE::TESBoundObject>()) {
-                    if (GrantIfAllowed(actor, boundRight, addIfMissing)) {
+                    if (!rightAlreadyCorrect && GrantIfAllowed(actor, boundRight, addIfMissing)) {
                         EquipItemExViaPapyrus(actor, boundRight, kEquipSlotRightHand);
                     }
                 }
                 if (auto* boundLeft = left->Resolve<RE::TESBoundObject>()) {
-                    if (GrantIfAllowed(actor, boundLeft, addIfMissing)) {
+                    if (!leftAlreadyCorrect && GrantIfAllowed(actor, boundLeft, addIfMissing)) {
                         EquipItemExViaPapyrus(actor, boundLeft, kEquipSlotLeftHand);
                     }
                 }
             } else if (right) {
                 if (auto* boundRight = right->Resolve<RE::TESBoundObject>()) {
-                    EquipBoundViaPapyrus(actor, boundRight, addIfMissing);
+                    if (!rightAlreadyCorrect) {
+                        EquipBoundViaPapyrus(actor, boundRight, addIfMissing);
+                    }
                 }
             } else if (left) {
                 if (auto* boundLeft = left->Resolve<RE::TESBoundObject>()) {
-                    if (GrantIfAllowed(actor, boundLeft, addIfMissing)) {
+                    if (!leftAlreadyCorrect && GrantIfAllowed(actor, boundLeft, addIfMissing)) {
                         EquipItemExViaPapyrus(actor, boundLeft, kEquipSlotLeftHand);
                     }
                 }
@@ -397,8 +478,7 @@ namespace Hotkeys {
     }
 
     void WeaponSetAction::Undo(RE::Actor* a_actor) const {
-        auto* equipManager = RE::ActorEquipManager::GetSingleton();
-        if (!equipManager || !a_actor) {
+        if (!a_actor) {
             return;
         }
 
@@ -407,7 +487,7 @@ namespace Hotkeys {
 
         if (m_ammo) {
             if (auto* ammo = a_actor->GetCurrentAmmo()) {
-                UnequipBound(equipManager, a_actor, ammo);
+                UnequipBound(a_actor, ammo);
             }
         }
     }
@@ -469,7 +549,9 @@ namespace Hotkeys {
                     return RE::BSContainer::ForEachResult::kContinue;
                 }
                 if (auto* bound = a_item.As<RE::TESBoundObject>()) {
-                    EquipBoundViaPapyrus(a_actor, bound, m_addIfMissing);
+                    if (!IsWorn(a_actor, bound)) {
+                        EquipBoundViaPapyrus(a_actor, bound, m_addIfMissing);
+                    }
                 }
                 return RE::BSContainer::ForEachResult::kContinue;
             });
@@ -478,7 +560,38 @@ namespace Hotkeys {
 
         for (const auto& item : m_items) {
             if (auto* armor = item.Resolve<RE::TESBoundObject>()) {
-                EquipBoundViaPapyrus(a_actor, armor, m_addIfMissing);
+                if (!IsWorn(a_actor, armor)) {
+                    EquipBoundViaPapyrus(a_actor, armor, m_addIfMissing);
+                }
+            }
+        }
+    }
+
+    void OutfitAction::Undo(RE::Actor* a_actor) const {
+        if (!a_actor) {
+            return;
+        }
+
+        if (m_outfitForm) {
+            auto* outfit = m_outfitForm->Resolve<RE::BGSOutfit>();
+            if (!outfit) {
+                return;
+            }
+            outfit->ForEachItem([&](RE::TESForm& a_item) {
+                if (a_item.As<RE::TESLevItem>()) {
+                    return RE::BSContainer::ForEachResult::kContinue;
+                }
+                if (auto* bound = a_item.As<RE::TESBoundObject>()) {
+                    UnequipBound(a_actor, bound);
+                }
+                return RE::BSContainer::ForEachResult::kContinue;
+            });
+            return;
+        }
+
+        for (const auto& item : m_items) {
+            if (auto* armor = item.Resolve<RE::TESBoundObject>()) {
+                UnequipBound(a_actor, armor);
             }
         }
     }
@@ -601,18 +714,15 @@ namespace Hotkeys {
         if (m_addIfMissing) {
             GrantShoutIfMissing(a_actor, shout);
         }
-        if (auto* equipManager = RE::ActorEquipManager::GetSingleton()) {
-            equipManager->EquipShout(a_actor, shout);
-        }
+        EquipShoutViaPapyrus(a_actor, shout);
     }
 
     void ShoutAction::Undo(RE::Actor* a_actor) const {
-        if (!a_actor) {
+        auto* shout = m_shout.Resolve<RE::TESShout>();
+        if (!shout || !a_actor) {
             return;
         }
-        if (auto* equipManager = RE::ActorEquipManager::GetSingleton()) {
-            equipManager->EquipShout(a_actor, nullptr);
-        }
+        UnequipShoutViaPapyrus(a_actor, shout);
     }
 
     std::string ShoutAction::Serialize() const {
@@ -669,16 +779,13 @@ namespace Hotkeys {
         if (!torch || !a_actor) {
             return;
         }
-        ClearHandSpellIfAny(a_actor, true);
-        UnequipHand(a_actor, true);
-        EquipBoundViaPapyrus(a_actor, torch, m_addIfMissing);
-    }
-
-    void ToggleTorchAction::Undo(RE::Actor* a_actor) const {
-        if (!a_actor) {
-            return;
+        if (auto* equipped = a_actor->GetEquippedObject(true); equipped && equipped->As<RE::TESBoundObject>() == torch) {
+            UnequipHand(a_actor, true);
+        } else {
+            ClearHandSpellIfAny(a_actor, true);
+            UnequipHand(a_actor, true);
+            EquipBoundViaPapyrus(a_actor, torch, m_addIfMissing);
         }
-        UnequipHand(a_actor, true);
     }
 
     std::string ToggleTorchAction::Serialize() const {
@@ -687,6 +794,15 @@ namespace Hotkeys {
     }
 
 
+    namespace {
+        float g_savedThirdPersonZoomOffset = 0.0f;
+
+        [[nodiscard]] RE::ThirdPersonState* GetThirdPersonState(RE::PlayerCamera* a_camera) {
+            auto& state = a_camera->cameraStates[RE::CameraStates::kThirdPerson];
+            return state ? skyrim_cast<RE::ThirdPersonState*>(state.get()) : nullptr;
+        }
+    }
+
     void TogglePOVAction::Execute(RE::Actor* a_actor) const {
         auto* camera = RE::PlayerCamera::GetSingleton();
         if (!camera) {
@@ -694,7 +810,14 @@ namespace Hotkeys {
         }
         if (camera->IsInFirstPerson()) {
             camera->ForceThirdPerson();
+            if (auto* thirdPerson = GetThirdPersonState(camera)) {
+                thirdPerson->currentZoomOffset = g_savedThirdPersonZoomOffset;
+                thirdPerson->targetZoomOffset = g_savedThirdPersonZoomOffset;
+            }
         } else {
+            if (auto* thirdPerson = GetThirdPersonState(camera)) {
+                g_savedThirdPersonZoomOffset = thirdPerson->currentZoomOffset;
+            }
             camera->ForceFirstPerson();
         }
     }
@@ -759,7 +882,7 @@ namespace Hotkeys {
         if (!m_specificItems.empty()) {
             for (const auto& item : m_specificItems) {
                 if (auto* bound = item.Resolve<RE::TESBoundObject>()) {
-                    UnequipBound(equipManager, a_actor, bound);
+                    UnequipBound(a_actor, bound);
                 }
             }
             return;
@@ -775,10 +898,10 @@ namespace Hotkeys {
             UnequipAllShouts(a_actor, equipManager);
         }
         if (m_categories.armor) {
-            UnequipAllArmor(a_actor, equipManager);
+            UnequipAllArmor(a_actor);
         }
         if (m_categories.ammo) {
-            UnequipAllAmmo(a_actor, equipManager);
+            UnequipAllAmmo(a_actor);
         }
     }
 

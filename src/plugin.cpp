@@ -50,6 +50,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
 
     SKSE::GetMessagingInterface()->RegisterListener(MessageHandler);
 
+
     Hotkeys::InputDispatchHook::Install();
 
     SKSE::log::info("{} loaded", SKSE::PluginDeclaration::GetSingleton()->GetName());

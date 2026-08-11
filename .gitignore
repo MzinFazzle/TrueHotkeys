@@ -1,3 +1,4 @@
+.vs/
 build/
 install/
 out/
@@ -5,4 +6,3 @@ out/
 CMakeUserPresets.json
 *.dll
 *.pdb
-.vs/

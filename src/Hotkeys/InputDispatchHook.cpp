@@ -2,12 +2,15 @@
 
 #include "Hotkeys/ContinuousMovement.h"
 #include "Hotkeys/InputHandler.h"
+#include "Hotkeys/SyntheticTap.h"
+#include "Hotkeys/ToggleSprint.h"
 
 namespace Hotkeys::InputDispatchHook {
     namespace {
         struct ProcessInput {
             static void thunk(RE::BSTEventSource<RE::InputEvent*>* a_dispatcher, RE::InputEvent* const* a_event) {
                 RE::InputEvent* head = (a_event && *a_event) ? *a_event : nullptr;
+
                 RE::InputEvent* prev = nullptr;
 
                 for (RE::InputEvent* event = head; event;) {
@@ -15,8 +18,12 @@ namespace Hotkeys::InputDispatchHook {
                     bool suppress = false;
 
                     if (event->GetEventType() == RE::INPUT_EVENT_TYPE::kButton) {
-                        if (auto* button = event->AsButtonEvent(); button && button->GetDevice() == RE::INPUT_DEVICE::kKeyboard) {
-                            suppress = InputHandler::GetSingleton()->HandleKeyboardButtonEvent(*button);
+                        if (auto* button = event->AsButtonEvent()) {
+                            if (button->GetDevice() == RE::INPUT_DEVICE::kKeyboard) {
+                                suppress = InputHandler::GetSingleton()->HandleKeyboardButtonEvent(*button);
+                            } else if (button->GetDevice() == RE::INPUT_DEVICE::kGamepad) {
+                                suppress = InputHandler::GetSingleton()->HandleGamepadButtonEvent(*button);
+                            }
                         }
                     }
 
@@ -37,6 +44,32 @@ namespace Hotkeys::InputDispatchHook {
                         prev->next = movementEvents;
                     } else {
                         head = movementEvents;
+                    }
+                    prev = movementEvents;
+                    while (prev->next) {
+                        prev = prev->next;
+                    }
+                }
+
+                SyntheticTap::CheckAutoMoveCancel(head);
+
+                if (auto* tapEvents = SyntheticTap::BuildFrameEvents()) {
+                    if (prev) {
+                        prev->next = tapEvents;
+                    } else {
+                        head = tapEvents;
+                    }
+                    prev = tapEvents;
+                    while (prev->next) {
+                        prev = prev->next;
+                    }
+                }
+
+                if (auto* sprintEvent = ToggleSprint::BuildFrameEvents()) {
+                    if (prev) {
+                        prev->next = sprintEvent;
+                    } else {
+                        head = sprintEvent;
                     }
                 }
 

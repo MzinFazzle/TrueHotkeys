@@ -1,6 +1,7 @@
 #include "Hotkeys/ConfigUI.h"
 #include "Hotkeys/HotkeyManager.h"
 #include "Hotkeys/InputDispatchHook.h"
+#include "Hotkeys/RelocDiagnostic.h"
 #include "Hotkeys/VanillaControlSuppressor.h"
 
 #include <spdlog/sinks/basic_file_sink.h>

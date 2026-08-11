@@ -2,6 +2,8 @@
 
 #include "Hotkeys/ContinuousMovement.h"
 #include "Hotkeys/EditorIDLookup.h"
+#include "Hotkeys/SyntheticTap.h"
+#include "Hotkeys/ToggleSprint.h"
 
 #include <cstdint>
 #include <format>
@@ -357,6 +359,28 @@ namespace Hotkeys {
                 return "Unequip";
             case ActionType::kMovement:
                 return "Movement";
+            case ActionType::kOpenMenu:
+                return "OpenMenu";
+            case ActionType::kReadySheath:
+                return "ReadySheath";
+            case ActionType::kToggleSneak:
+                return "ToggleSneak";
+            case ActionType::kToggleAutoMove:
+                return "ToggleAutoMove";
+            case ActionType::kJump:
+                return "Jump";
+            case ActionType::kToggleFreeCam:
+                return "ToggleFreeCam";
+            case ActionType::kToggleFreeCamPaused:
+                return "ToggleFreeCamPaused";
+            case ActionType::kToggleSprint:
+                return "ToggleSprint";
+            case ActionType::kQuickSave:
+                return "QuickSave";
+            case ActionType::kQuickLoad:
+                return "QuickLoad";
+            case ActionType::kToggleMenus:
+                return "ToggleMenus";
         }
         return "Unknown";
     }
@@ -385,6 +409,42 @@ namespace Hotkeys {
                 return "StrafeLeft";
             case MovementDirection::kStrafeRight:
                 return "StrafeRight";
+        }
+        return "Unknown";
+    }
+
+    std::string_view ToString(OpenMenuTarget a_target) noexcept {
+        switch (a_target) {
+            case OpenMenuTarget::kInventory:
+                return "Inventory";
+            case OpenMenuTarget::kSpells:
+                return "Spells";
+            case OpenMenuTarget::kMap:
+                return "Map";
+            case OpenMenuTarget::kSkills:
+                return "Skills";
+            case OpenMenuTarget::kFavorites:
+                return "Favorites";
+            case OpenMenuTarget::kWaitRest:
+                return "Rest";
+        }
+        return "Unknown";
+    }
+
+    std::string_view ToDisplayString(OpenMenuTarget a_target) noexcept {
+        switch (a_target) {
+            case OpenMenuTarget::kInventory:
+                return "Inventory";
+            case OpenMenuTarget::kSpells:
+                return "Spells";
+            case OpenMenuTarget::kMap:
+                return "Map";
+            case OpenMenuTarget::kSkills:
+                return "Skills";
+            case OpenMenuTarget::kFavorites:
+                return "Favorites";
+            case OpenMenuTarget::kWaitRest:
+                return "Wait/Rest";
         }
         return "Unknown";
     }
@@ -544,11 +604,14 @@ namespace Hotkeys {
             if (!outfit) {
                 return;
             }
-            outfit->ForEachItem([&](RE::TESForm& a_item) {
-                if (a_item.As<RE::TESLevItem>()) {
+            outfit->ForEachItem([&](RE::TESForm* a_item) {
+                if (!a_item) {
                     return RE::BSContainer::ForEachResult::kContinue;
                 }
-                if (auto* bound = a_item.As<RE::TESBoundObject>()) {
+                if (a_item->As<RE::TESLevItem>()) {
+                    return RE::BSContainer::ForEachResult::kContinue;
+                }
+                if (auto* bound = a_item->As<RE::TESBoundObject>()) {
                     if (!IsWorn(a_actor, bound)) {
                         EquipBoundViaPapyrus(a_actor, bound, m_addIfMissing);
                     }
@@ -577,11 +640,14 @@ namespace Hotkeys {
             if (!outfit) {
                 return;
             }
-            outfit->ForEachItem([&](RE::TESForm& a_item) {
-                if (a_item.As<RE::TESLevItem>()) {
+            outfit->ForEachItem([&](RE::TESForm* a_item) {
+                if (!a_item) {
                     return RE::BSContainer::ForEachResult::kContinue;
                 }
-                if (auto* bound = a_item.As<RE::TESBoundObject>()) {
+                if (a_item->As<RE::TESLevItem>()) {
+                    return RE::BSContainer::ForEachResult::kContinue;
+                }
+                if (auto* bound = a_item->As<RE::TESBoundObject>()) {
                     UnequipBound(a_actor, bound);
                 }
                 return RE::BSContainer::ForEachResult::kContinue;
@@ -823,6 +889,91 @@ namespace Hotkeys {
     }
 
 
+    void ReadySheathAction::Execute(RE::Actor* a_actor) const {
+        if (!a_actor) {
+            return;
+        }
+        a_actor->DrawWeaponMagicHands(!a_actor->AsActorState()->IsWeaponDrawn());
+    }
+
+
+    void ToggleSneakAction::Execute(RE::Actor* a_actor) const {
+        (void)a_actor;
+        SyntheticTap::Queue(SyntheticTap::Kind::kSneak);
+    }
+
+
+    void ToggleAutoMoveAction::Execute(RE::Actor* a_actor) const {
+        (void)a_actor;
+        SyntheticTap::Queue(SyntheticTap::Kind::kAutoMove);
+    }
+
+
+    void JumpAction::Execute(RE::Actor* a_actor) const {
+        (void)a_actor;
+        SyntheticTap::Queue(SyntheticTap::Kind::kJump);
+    }
+
+
+    void ToggleFreeCamAction::Execute(RE::Actor* a_actor) const {
+        (void)a_actor;
+        auto* camera = RE::PlayerCamera::GetSingleton();
+        if (!camera) {
+            return;
+        }
+        camera->ToggleFreeCameraMode(false);
+        if (auto* controls = RE::ControlMap::GetSingleton()) {
+            constexpr auto context = RE::ControlMap::InputContextID::kTFCMode;
+            if (camera->IsInFreeCameraMode()) {
+                controls->PushInputContext(context);
+            } else {
+                controls->PopInputContext(context);
+            }
+        }
+    }
+
+
+    void ToggleFreeCamPausedAction::Execute(RE::Actor* a_actor) const {
+        (void)a_actor;
+        auto* camera = RE::PlayerCamera::GetSingleton();
+        if (!camera) {
+            return;
+        }
+        camera->ToggleFreeCameraMode(true);
+        if (auto* controls = RE::ControlMap::GetSingleton()) {
+            constexpr auto context = RE::ControlMap::InputContextID::kTFCMode;
+            if (camera->IsInFreeCameraMode()) {
+                controls->PushInputContext(context);
+            } else {
+                controls->PopInputContext(context);
+            }
+        }
+    }
+
+
+    void ToggleSprintAction::Execute(RE::Actor* a_actor) const {
+        (void)a_actor;
+        ToggleSprint::Toggle();
+    }
+
+    void QuickSaveAction::Execute(RE::Actor* a_actor) const {
+        (void)a_actor;
+        SyntheticTap::Queue(SyntheticTap::Kind::kQuickSave);
+    }
+
+    void QuickLoadAction::Execute(RE::Actor* a_actor) const {
+        (void)a_actor;
+        SyntheticTap::Queue(SyntheticTap::Kind::kQuickLoad);
+    }
+
+    void ToggleMenusAction::Execute(RE::Actor* a_actor) const {
+        (void)a_actor;
+        if (auto* ui = RE::UI::GetSingleton()) {
+            ui->ShowMenus(!ui->IsShowingMenus());
+        }
+    }
+
+
     std::string MovementAction::GetDisplayName() const {
         switch (m_direction) {
             case MovementDirection::kForward:
@@ -848,6 +999,54 @@ namespace Hotkeys {
     }
 
     std::string MovementAction::Serialize() const { return std::format("Type:Movement|Direction:{}", ToString(m_direction)); }
+
+
+    std::string OpenMenuAction::GetDisplayName() const { return std::format("Open Menu: {}", ToDisplayString(m_target)); }
+
+    namespace {
+        void ShowSleepWaitMenu(bool a_sleep) {
+            using func_t = decltype(&ShowSleepWaitMenu);
+            REL::Relocation<func_t> func{REL::ID{52490}};
+            func(a_sleep);
+        }
+    }
+
+    void OpenMenuAction::Execute(RE::Actor* a_actor) const {
+        if (m_target == OpenMenuTarget::kWaitRest) {
+            bool sleep = a_actor && a_actor->AsActorState()->GetSitSleepState() == RE::SIT_SLEEP_STATE::kIsSleeping;
+            ShowSleepWaitMenu(sleep);
+            return;
+        }
+
+        (void)a_actor;
+        auto* queue = RE::UIMessageQueue::GetSingleton();
+        if (!queue) {
+            return;
+        }
+        std::string_view menuName;
+        switch (m_target) {
+            case OpenMenuTarget::kInventory:
+                menuName = RE::InventoryMenu::MENU_NAME;
+                break;
+            case OpenMenuTarget::kSpells:
+                menuName = RE::MagicMenu::MENU_NAME;
+                break;
+            case OpenMenuTarget::kMap:
+                menuName = RE::MapMenu::MENU_NAME;
+                break;
+            case OpenMenuTarget::kSkills:
+                menuName = RE::StatsMenu::MENU_NAME;
+                break;
+            case OpenMenuTarget::kFavorites:
+                menuName = RE::FavoritesMenu::MENU_NAME;
+                break;
+            case OpenMenuTarget::kWaitRest:
+                return;  // handled above, never reached
+        }
+        queue->AddMessage(menuName, RE::UI_MESSAGE_TYPE::kShow, nullptr);
+    }
+
+    std::string OpenMenuAction::Serialize() const { return std::format("Type:OpenMenu|Target:{}", ToString(m_target)); }
 
 
     std::string PanicAction::GetDisplayName() const {
@@ -958,6 +1157,17 @@ namespace Hotkeys {
             if (a_str == "Backward") return MovementDirection::kBackward;
             if (a_str == "StrafeLeft") return MovementDirection::kStrafeLeft;
             if (a_str == "StrafeRight") return MovementDirection::kStrafeRight;
+            return std::nullopt;
+        }
+
+        [[nodiscard]] std::optional<OpenMenuTarget> ParseOpenMenuTarget(std::string_view a_str) {
+            if (a_str == "Inventory") return OpenMenuTarget::kInventory;
+            if (a_str == "Spells") return OpenMenuTarget::kSpells;
+            if (a_str == "Map") return OpenMenuTarget::kMap;
+            if (a_str == "Skills") return OpenMenuTarget::kSkills;
+            if (a_str == "Favorites") return OpenMenuTarget::kFavorites;
+            if (a_str == "Rest") return OpenMenuTarget::kWaitRest;
+            if (a_str == "Wait") return OpenMenuTarget::kWaitRest;
             return std::nullopt;
         }
 
@@ -1147,6 +1357,47 @@ namespace Hotkeys {
             return std::make_unique<TogglePOVAction>();
         }
 
+        if (*type == "ReadySheath") {
+            return std::make_unique<ReadySheathAction>();
+        }
+
+        if (*type == "ToggleSneak") {
+            return std::make_unique<ToggleSneakAction>();
+        }
+
+        if (*type == "ToggleAutoMove") {
+            return std::make_unique<ToggleAutoMoveAction>();
+        }
+
+        if (*type == "Jump") {
+            return std::make_unique<JumpAction>();
+        }
+
+        if (*type == "ToggleFreeCam") {
+            return std::make_unique<ToggleFreeCamAction>();
+        }
+
+        if (*type == "ToggleFreeCamPaused") {
+            return std::make_unique<ToggleFreeCamPausedAction>();
+        }
+
+
+        if (*type == "ToggleSprint") {
+            return std::make_unique<ToggleSprintAction>();
+        }
+
+        if (*type == "QuickSave") {
+            return std::make_unique<QuickSaveAction>();
+        }
+
+        if (*type == "QuickLoad") {
+            return std::make_unique<QuickLoadAction>();
+        }
+
+        if (*type == "ToggleMenus") {
+            return std::make_unique<ToggleMenusAction>();
+        }
+
         if (*type == "Movement") {
             const auto* directionStr = FindField(a_fields, "Direction");
             if (!directionStr) {
@@ -1157,6 +1408,18 @@ namespace Hotkeys {
                 return nullptr;
             }
             return std::make_unique<MovementAction>(*direction);
+        }
+
+        if (*type == "OpenMenu") {
+            const auto* targetStr = FindField(a_fields, "Target");
+            if (!targetStr) {
+                return nullptr;
+            }
+            auto target = ParseOpenMenuTarget(*targetStr);
+            if (!target) {
+                return nullptr;
+            }
+            return std::make_unique<OpenMenuAction>(*target);
         }
 
         if (*type == "Panic") {

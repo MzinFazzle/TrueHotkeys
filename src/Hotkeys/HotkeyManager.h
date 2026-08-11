@@ -3,6 +3,7 @@
 
 #include "Hotkeys/BindKey.h"
 #include "Hotkeys/DXScanCodes.h"
+#include "Hotkeys/GamepadButtons.h"
 #include "Hotkeys/HotkeyAction.h"
 #include "Hotkeys/Profile.h"
 
@@ -19,6 +20,7 @@ namespace Hotkeys {
     struct Settings {
         bool enabled = true;  // master on/off switch for the whole mod
         std::uint32_t modifierKeyCode = DXScanCode::kLeftShift;
+        std::uint32_t modifierGamepadCode = GamepadButton::kRightShoulder;
         std::uint32_t defaultProfileCycleKeyCode = 0;
         bool defaultProfileCycleRequiresModifier = false;
         float holdThresholdSeconds = 0.5f;  // global, not per-bind (see DESIGN.md)
@@ -38,6 +40,12 @@ namespace Hotkeys {
         bool confirmSavesAndDeletes = true;
         bool autoSaveProfileChanges = true;
         bool allowHotkeysInGameMenus = false;
+
+        bool blockHotkeysInInventoryMenu = true;
+        bool blockHotkeysInMagicMenu = true;
+        bool blockHotkeysInMapMenu = true;
+        bool blockHotkeysInStatsMenu = false;
+
     };
 
     struct ActionSummary {

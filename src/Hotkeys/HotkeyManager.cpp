@@ -3,6 +3,7 @@
 #include "Hotkeys/Actions.h"
 #include "Hotkeys/ContinuousMovement.h"
 #include "Hotkeys/DXScanCodes.h"
+#include "Hotkeys/ToggleSprint.h"
 #include "Hotkeys/VanillaControlSuppressor.h"
 
 #include <algorithm>
@@ -33,6 +34,10 @@ namespace Hotkeys {
                 } else if (key == "ModifierKey") {
                     if (auto code = DXScanCode::KeyNameToCode(value)) {
                         a_settings.modifierKeyCode = *code;
+                    }
+                } else if (key == "ModifierGamepadButton") {
+                    if (auto code = GamepadButton::ButtonNameToCode(value)) {
+                        a_settings.modifierGamepadCode = *code;
                     }
                 } else if (key == "DefaultProfileCycleKey") {
                     if (auto code = DXScanCode::KeyNameToCode(value)) {
@@ -68,6 +73,14 @@ namespace Hotkeys {
                     a_settings.autoSaveProfileChanges = (value == "1" || value == "true");
                 } else if (key == "AllowHotkeysInGameMenus") {
                     a_settings.allowHotkeysInGameMenus = (value == "1" || value == "true");
+                } else if (key == "BlockHotkeysInInventoryMenu") {
+                    a_settings.blockHotkeysInInventoryMenu = (value == "1" || value == "true");
+                } else if (key == "BlockHotkeysInMagicMenu") {
+                    a_settings.blockHotkeysInMagicMenu = (value == "1" || value == "true");
+                } else if (key == "BlockHotkeysInMapMenu") {
+                    a_settings.blockHotkeysInMapMenu = (value == "1" || value == "true");
+                } else if (key == "BlockHotkeysInStatsMenu") {
+                    a_settings.blockHotkeysInStatsMenu = (value == "1" || value == "true");
                 }
             }
         }
@@ -84,6 +97,8 @@ namespace Hotkeys {
             file << "Enabled=" << (a_settings.enabled ? "1" : "0") << "\n";
             auto modName = DXScanCode::CodeToKeyName(a_settings.modifierKeyCode);
             file << "ModifierKey=" << (modName ? *modName : "") << "\n";
+            auto gpModName = GamepadButton::CodeToButtonName(a_settings.modifierGamepadCode);
+            file << "ModifierGamepadButton=" << (gpModName ? *gpModName : "") << "\n";
             auto defaultCycleName = DXScanCode::CodeToKeyName(a_settings.defaultProfileCycleKeyCode);
             file << "DefaultProfileCycleKey=" << (defaultCycleName ? *defaultCycleName : "") << "\n";
             file << "DefaultProfileCycleRequiresModifier=" << (a_settings.defaultProfileCycleRequiresModifier ? "1" : "0") << "\n";
@@ -101,6 +116,10 @@ namespace Hotkeys {
             file << "ConfirmSavesAndDeletes=" << (a_settings.confirmSavesAndDeletes ? "1" : "0") << "\n";
             file << "AutoSaveProfileChanges=" << (a_settings.autoSaveProfileChanges ? "1" : "0") << "\n";
             file << "AllowHotkeysInGameMenus=" << (a_settings.allowHotkeysInGameMenus ? "1" : "0") << "\n";
+            file << "BlockHotkeysInInventoryMenu=" << (a_settings.blockHotkeysInInventoryMenu ? "1" : "0") << "\n";
+            file << "BlockHotkeysInMagicMenu=" << (a_settings.blockHotkeysInMagicMenu ? "1" : "0") << "\n";
+            file << "BlockHotkeysInMapMenu=" << (a_settings.blockHotkeysInMapMenu ? "1" : "0") << "\n";
+            file << "BlockHotkeysInStatsMenu=" << (a_settings.blockHotkeysInStatsMenu ? "1" : "0") << "\n";
         }
     }
 
@@ -173,6 +192,7 @@ namespace Hotkeys {
         }
         m_activeToggleBinds.clear();
         ContinuousMovement::StopAll();
+        ToggleSprint::Stop();
         VanillaControlSuppressor::Sync();
 
         if (m_settings.activeProfileName != m_activeProfile.name) {
@@ -192,6 +212,9 @@ namespace Hotkeys {
         auto holdIt = m_bindLookup.find(BindKey{a_idCode, a_modifierHeld, PressType::kHold});
         bool hasMatchingBind = tapIt != m_bindLookup.end() || holdIt != m_bindLookup.end();
         if (!hasMatchingBind) {
+            return false;
+        }
+        if (!IsSafeToAct()) {
             return false;
         }
         if (a_modifierHeld) {
@@ -218,8 +241,9 @@ namespace Hotkeys {
         }
 
         static constexpr std::array kBlockingMenus = {
-            RE::Console::MENU_NAME,     RE::DialogueMenu::MENU_NAME, RE::LoadingMenu::MENU_NAME,
-            RE::MainMenu::MENU_NAME,    RE::CraftingMenu::MENU_NAME, RE::RaceSexMenu::MENU_NAME,
+            RE::Console::MENU_NAME,      RE::DialogueMenu::MENU_NAME,  RE::LoadingMenu::MENU_NAME,
+            RE::MainMenu::MENU_NAME,     RE::CraftingMenu::MENU_NAME,  RE::RaceSexMenu::MENU_NAME,
+            RE::SleepWaitMenu::MENU_NAME,
         };
         for (auto menuName : kBlockingMenus) {
             if (ui->IsMenuOpen(menuName)) {
@@ -227,11 +251,26 @@ namespace Hotkeys {
             }
         }
 
+        if (m_settings.blockHotkeysInInventoryMenu && ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
+            return false;
+        }
+        if (m_settings.blockHotkeysInMagicMenu && ui->IsMenuOpen(RE::MagicMenu::MENU_NAME)) {
+            return false;
+        }
+        if (m_settings.blockHotkeysInMapMenu && ui->IsMenuOpen(RE::MapMenu::MENU_NAME)) {
+            return false;
+        }
+        if (m_settings.blockHotkeysInStatsMenu && ui->IsMenuOpen(RE::StatsMenu::MENU_NAME)) {
+            return false;
+        }
+
         if (!m_settings.allowHotkeysInGameMenus) {
             static constexpr std::array kPausingMenus = {
-                RE::MagicMenu::MENU_NAME,  RE::FavoritesMenu::MENU_NAME, RE::ContainerMenu::MENU_NAME,
-                RE::BarterMenu::MENU_NAME, RE::MapMenu::MENU_NAME,       RE::JournalMenu::MENU_NAME,
-                RE::BookMenu::MENU_NAME,   RE::InventoryMenu::MENU_NAME,
+                RE::FavoritesMenu::MENU_NAME,
+                RE::ContainerMenu::MENU_NAME,
+                RE::BarterMenu::MENU_NAME,
+                RE::JournalMenu::MENU_NAME,
+                RE::BookMenu::MENU_NAME,
             };
             for (auto menuName : kPausingMenus) {
                 if (ui->IsMenuOpen(menuName)) {

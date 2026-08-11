@@ -8,15 +8,26 @@
 namespace Hotkeys {
     enum class ActionType : std::uint8_t {
         kWeaponSet,
-        kOutfit,
+        kAmmoSwap,
         kSpell,
         kShout,
+        kOutfit,
         kConsumable,
-        kAmmoSwap,
-        kToggleTorch,
-        kTogglePOV,
         kPanic,
         kMovement,
+        kReadySheath,
+        kJump,
+        kToggleSneak,
+        kToggleSprint,
+        kToggleAutoMove,
+        kToggleTorch,
+        kTogglePOV,
+        kToggleFreeCam,
+        kToggleFreeCamPaused,
+        kToggleMenus,
+        kOpenMenu,
+        kQuickSave,
+        kQuickLoad,
     };
 
     enum class Hand : std::uint8_t {
@@ -33,9 +44,21 @@ namespace Hotkeys {
         kStrafeRight,
     };
 
+    enum class OpenMenuTarget : std::uint8_t {
+        kInventory,
+        kSpells,
+        kMap,
+        kSkills,
+        kFavorites,
+        kWaitRest,
+    };
+
     [[nodiscard]] std::string_view ToString(ActionType a_type) noexcept;
     [[nodiscard]] std::string_view ToString(Hand a_hand) noexcept;
     [[nodiscard]] std::string_view ToString(MovementDirection a_direction) noexcept;
+    [[nodiscard]] std::string_view ToString(OpenMenuTarget a_target) noexcept;
+
+    [[nodiscard]] std::string_view ToDisplayString(OpenMenuTarget a_target) noexcept;
 
     class IHotkeyAction {
     public:

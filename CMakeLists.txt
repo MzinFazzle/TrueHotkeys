@@ -16,7 +16,7 @@ cmake_minimum_required(VERSION 3.21)
 # Project name - this becomes the name of your SKSE .dll file, your plugin's
 # display name in skse64.log, and (via SKSE::PluginDeclaration) the name your
 # own log file is written under.
-project(TrueHotkeys VERSION 1.1.0 LANGUAGES CXX)
+project(TrueHotkeys VERSION 1.2.0 LANGUAGES CXX)
 
 # #
 # YOU DO NOT NEED TO EDIT ANYTHING BELOW HERE
@@ -56,6 +56,9 @@ add_commonlibsse_plugin(${PROJECT_NAME} SOURCES
     src/Hotkeys/InputDispatchHook.cpp
     src/Hotkeys/InputHandler.cpp
     src/Hotkeys/Profile.cpp
+    src/Hotkeys/RelocDiagnostic.cpp
+    src/Hotkeys/SyntheticTap.cpp
+    src/Hotkeys/ToggleSprint.cpp
     src/Hotkeys/VanillaControlSuppressor.cpp
     # Add more .cpp/.h files here as your plugin grows.
 )

@@ -2,8 +2,10 @@
 
 #include "Hotkeys/Actions.h"
 #include "Hotkeys/DXScanCodes.h"
+#include "Hotkeys/GamepadButtons.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <format>
 #include <fstream>
 #include <string_view>
@@ -58,6 +60,19 @@ namespace Hotkeys {
 
             auto code = DXScanCode::KeyNameToCode(keyIt->second);
             if (!code) {
+                code = GamepadButton::ButtonNameToCode(keyIt->second);
+            }
+            if (!code) {
+                const auto& text = keyIt->second;
+                if (text.size() > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')) {
+                    char* end = nullptr;
+                    unsigned long parsed = std::strtoul(text.c_str() + 2, &end, 16);
+                    if (end != text.c_str() + 2) {  // at least one hex digit consumed
+                        code = static_cast<std::uint32_t>(parsed);
+                    }
+                }
+            }
+            if (!code) {
                 return std::nullopt;
             }
 
@@ -90,6 +105,9 @@ namespace Hotkeys {
 
         [[nodiscard]] std::string SerializeBindLine(const Bind& a_bind) {
             auto keyName = DXScanCode::CodeToKeyName(a_bind.key.idCode);
+            if (!keyName) {
+                keyName = GamepadButton::CodeToButtonName(a_bind.key.idCode);
+            }
             std::string key = keyName ? *keyName : std::format("0x{:02X}", a_bind.key.idCode);
             std::string mod = a_bind.key.modifierHeld ? "1" : "0";
             std::string press = (a_bind.key.press == PressType::kHold) ? "Hold" : "Tap";

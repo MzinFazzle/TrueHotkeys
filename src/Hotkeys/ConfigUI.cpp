@@ -3,6 +3,7 @@
 #include "Hotkeys/Actions.h"
 #include "Hotkeys/DXScanCodes.h"
 #include "Hotkeys/FormBrowser.h"
+#include "Hotkeys/GamepadButtons.h"
 #include "Hotkeys/HotkeyManager.h"
 #include "Hotkeys/InputHandler.h"
 #include "Hotkeys/Profile.h"
@@ -24,7 +25,7 @@ namespace Hotkeys {
     namespace {
         using namespace ImGuiMCP;
 
-        enum class CaptureTarget { kNone, kModifierKey, kProfileCycleKey, kBindKey };
+        enum class CaptureTarget { kNone, kModifierKey, kGamepadModifier, kProfileCycleKey, kBindKey };
         CaptureTarget s_captureTarget = CaptureTarget::kNone;
 
         bool s_menuOpen = false;
@@ -33,17 +34,26 @@ namespace Hotkeys {
 
         std::string s_lastSelectedForm;
 
-        constexpr const char* kActionTypeNames[] = {"Weapon",     "Outfit", "Spell",       "Shout",  "Consumable",
-                                                     "Ammo",       "ToggleTorch", "TogglePOV", "Panic", "Movement"};
-        constexpr const char* kActionTypeDisplayNames[] = {"Weapon",       "Outfit",     "Spell",  "Shout",    "Consumable",
-                                                            "Ammo",         "Toggle Torch", "Toggle POV", "Unequip", "Movement"};
-        constexpr int kActionTypeCount = 10;
+        constexpr const char* kActionTypeNames[] = {
+            "Weapon",       "Ammo",      "Spell",          "Shout",         "Outfit",     "Consumable", "Panic",
+            "Movement",     "ReadySheath", "Jump",          "ToggleSneak",   "ToggleSprint", "ToggleAutoMove",
+            "ToggleTorch",  "TogglePOV", "ToggleFreeCam",  "ToggleFreeCamPaused", "ToggleMenus", "OpenMenu",
+            "QuickSave",    "QuickLoad"};
+        constexpr const char* kActionTypeDisplayNames[] = {
+            "Weapon",           "Ammo",     "Spell",             "Shout",          "Outfit",       "Consumable", "Unequip",
+            "Movement",         "Ready/Sheath", "Jump",          "Toggle Sneak",   "Toggle Sprint", "Toggle Auto Move",
+            "Toggle Torch",     "Toggle POV", "Toggle FreeCam",  "Toggle FreeCam (Paused)", "Toggle Menus", "Open Menu",
+            "Quick Save",       "Quick Load"};
+        constexpr int kActionTypeCount = 21;
         constexpr const char* kPressNames[] = {"Tap", "Hold"};
         constexpr const char* kOutfitModeNames[] = {"Individual Items", "Outfit Record"};
         constexpr int kOutfitModeCount = 2;
         constexpr const char* kMovementDirectionNames[] = {"Forward", "Backward", "StrafeLeft", "StrafeRight"};
         constexpr const char* kMovementDirectionDisplayNames[] = {"Move Forward", "Move Backward", "Strafe Left", "Strafe Right"};
         constexpr int kMovementDirectionCount = 4;
+        constexpr const char* kOpenMenuTargetNames[] = {"Inventory", "Spells", "Map", "Skills", "Favorites", "Rest"};
+        constexpr const char* kOpenMenuTargetDisplayNames[] = {"Inventory", "Spells", "Map", "Skills", "Favorites", "Wait/Rest"};
+        constexpr int kOpenMenuTargetCount = 6;
 
 
         [[nodiscard]] std::string KeyName(std::uint32_t a_idCode) {
@@ -53,14 +63,23 @@ namespace Hotkeys {
             if (auto name = DXScanCode::CodeToKeyName(a_idCode)) {
                 return *name;
             }
+            if (auto name = GamepadButton::DisplayName(a_idCode)) {
+                return *name;
+            }
             char buf[16];
             std::snprintf(buf, sizeof(buf), "0x%02X", a_idCode);
             return buf;
         }
 
-        [[nodiscard]] std::string BindKeyLabel(const BindKey& a_key, std::uint32_t a_modifierKeyCode) {
-            std::string label = (a_key.modifierHeld && a_modifierKeyCode != 0) ? std::format("{} + {}", KeyName(a_modifierKeyCode), KeyName(a_key.idCode))
-                                                                                : KeyName(a_key.idCode);
+        [[nodiscard]] std::string KeyWithModifierLabel(std::uint32_t a_idCode, bool a_requiresModifier, std::uint32_t a_modifierKeyCode,
+                                                        std::uint32_t a_modifierGamepadCode) {
+            std::uint32_t effectiveModifierCode = GamepadButton::IsGamepadCode(a_idCode) ? a_modifierGamepadCode : a_modifierKeyCode;
+            return (a_requiresModifier && effectiveModifierCode != 0) ? std::format("{} + {}", KeyName(effectiveModifierCode), KeyName(a_idCode))
+                                                                       : KeyName(a_idCode);
+        }
+
+        [[nodiscard]] std::string BindKeyLabel(const BindKey& a_key, std::uint32_t a_modifierKeyCode, std::uint32_t a_modifierGamepadCode) {
+            std::string label = KeyWithModifierLabel(a_key.idCode, a_key.modifierHeld, a_modifierKeyCode, a_modifierGamepadCode);
             label += (a_key.press == PressType::kHold) ? " (Hold)" : " (Tap)";
             return label;
         }
@@ -82,17 +101,21 @@ namespace Hotkeys {
 
         enum class CaptureResult { kPending, kCaptured, kCancelled };
 
-        CaptureResult RenderCaptureButton(CaptureTarget a_target, std::uint32_t& a_outCode) {
+        CaptureResult RenderCaptureButton(CaptureTarget a_target, std::uint32_t& a_outCode, bool* a_outRequiresModifier = nullptr) {
             auto* input = InputHandler::GetSingleton();
 
             if (s_captureTarget == a_target) {
                 std::uint32_t captured = 0;
-                if (input->TryConsumeCapturedKey(captured)) {
+                bool requiresModifier = false;
+                if (input->TryConsumeCapturedKey(captured, requiresModifier)) {
                     a_outCode = captured;
+                    if (a_outRequiresModifier) {
+                        *a_outRequiresModifier = requiresModifier;
+                    }
                     s_captureTarget = CaptureTarget::kNone;
                     return CaptureResult::kCaptured;
                 }
-                Text("press a key...");
+                Text(input->IsCaptureModifierHeld() ? "Modifier + ..." : "press a key...");
                 SameLine();
                 if (Button("Cancel")) {
                     input->CancelCapture();
@@ -101,7 +124,8 @@ namespace Hotkeys {
                 }
             } else {
                 if (Button("Bind")) {
-                    input->BeginCapture();
+                    bool combinesWithModifier = a_target != CaptureTarget::kModifierKey && a_target != CaptureTarget::kGamepadModifier;
+                    input->BeginCapture(combinesWithModifier);
                     s_captureTarget = a_target;
                 }
             }
@@ -113,10 +137,18 @@ namespace Hotkeys {
                 return false;
             }
             auto* button = a_event->AsButtonEvent();
-            if (!button || button->GetDevice() != RE::INPUT_DEVICE::kKeyboard || !button->IsDown()) {
+            if (!button || !button->IsDown()) {
                 return false;
             }
-            InputHandler::GetSingleton()->ReportExternalCapture(button->GetIDCode());
+            if (button->GetDevice() == RE::INPUT_DEVICE::kKeyboard) {
+                InputHandler::GetSingleton()->ReportExternalCapture(button->GetIDCode());
+                return false;
+            }
+            if (auto code = GamepadButton::ToUnifiedCode(*button)) {
+                const bool wasCapturing = InputHandler::GetSingleton()->IsCapturing();
+                InputHandler::GetSingleton()->ReportExternalCapture(*code);
+                return wasCapturing;
+            }
             return false;  // don't consume - just observing for capture mode
         }
 
@@ -958,6 +990,7 @@ namespace Hotkeys {
             FieldPicker unequipWornPicker;
             std::vector<FormRef> unequipItems;
             int movementDirectionIndex = 0;
+            int openMenuTargetIndex = 0;
         };
         ActionEditState s_actionEditor;
 
@@ -1267,6 +1300,7 @@ namespace Hotkeys {
             bool hasWeapon = std::find(a_existingTypes.begin(), a_existingTypes.end(), ActionType::kWeaponSet) != a_existingTypes.end();
             bool hasAmmo = std::find(a_existingTypes.begin(), a_existingTypes.end(), ActionType::kAmmoSwap) != a_existingTypes.end();
             bool hasMovement = std::find(a_existingTypes.begin(), a_existingTypes.end(), ActionType::kMovement) != a_existingTypes.end();
+            bool hasOpenMenu = std::find(a_existingTypes.begin(), a_existingTypes.end(), ActionType::kOpenMenu) != a_existingTypes.end();
 
             std::vector<ActionType> allowed;
             for (int i = 0; i < kActionTypeCount; ++i) {
@@ -1285,6 +1319,12 @@ namespace Hotkeys {
                 }
                 if (hasMovement && type != ActionType::kMovement) {
                     continue;  // bind already has Movement - nothing else can join it
+                }
+                if (type == ActionType::kOpenMenu && !a_existingTypes.empty()) {
+                    continue;  // bind already has something else - Open Menu can't join it
+                }
+                if (hasOpenMenu && type != ActionType::kOpenMenu) {
+                    continue;  // bind already has Open Menu - nothing else can join it
                 }
                 allowed.push_back(type);
             }
@@ -1431,11 +1471,33 @@ namespace Hotkeys {
                     break;
                 case ActionType::kTogglePOV:
                     break;
+                case ActionType::kReadySheath:
+                case ActionType::kToggleSneak:
+                case ActionType::kToggleAutoMove:
+                case ActionType::kJump:
+                case ActionType::kToggleFreeCam:
+                case ActionType::kToggleFreeCamPaused:
+                case ActionType::kToggleSprint:
+                case ActionType::kQuickSave:
+                case ActionType::kQuickLoad:
+                case ActionType::kToggleMenus:
+                    break;
                 case ActionType::kMovement:
                     if (auto it = fields.find("Direction"); it != fields.end()) {
                         for (int i = 0; i < kMovementDirectionCount; ++i) {
                             if (it->second == kMovementDirectionNames[i]) {
                                 s_actionEditor.movementDirectionIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                case ActionType::kOpenMenu:
+                    if (auto it = fields.find("Target"); it != fields.end()) {
+                        std::string_view target = it->second == "Wait" ? "Rest" : std::string_view{it->second};
+                        for (int i = 0; i < kOpenMenuTargetCount; ++i) {
+                            if (target == kOpenMenuTargetNames[i]) {
+                                s_actionEditor.openMenuTargetIndex = i;
                                 break;
                             }
                         }
@@ -1484,6 +1546,8 @@ namespace Hotkeys {
         }
 
         void RenderKeyEditor() {
+            const auto& settings = HotkeyManager::GetSingleton()->GetSettings();
+
             Separator();
             TextColored(ImVec4{0.9f, 0.9f, 0.3f, 1.0f}, "Editing Bind");
 
@@ -1498,7 +1562,10 @@ namespace Hotkeys {
 
             if (s_keyEditor.isNewKey || s_keyEditor.isRemapping) {
                 if (s_keyEditor.pendingCode) {
-                    Text("Key: %s", KeyName(*s_keyEditor.pendingCode).c_str());
+                    Text("Key: %s",
+                         KeyWithModifierLabel(*s_keyEditor.pendingCode, s_keyEditor.requiresModifier, settings.modifierKeyCode,
+                                               settings.modifierGamepadCode)
+                             .c_str());
                     SameLine();
                     if (SmallButton("Ok")) {
                         BindKey newKey{*s_keyEditor.pendingCode, s_keyEditor.requiresModifier,
@@ -1542,10 +1609,12 @@ namespace Hotkeys {
                     SameLine();
                     PushID("BindKeyCapture");
                     std::uint32_t captured = 0;
-                    auto result = RenderCaptureButton(CaptureTarget::kBindKey, captured);
+                    bool capturedRequiresModifier = false;
+                    auto result = RenderCaptureButton(CaptureTarget::kBindKey, captured, &capturedRequiresModifier);
                     PopID();
                     if (result == CaptureResult::kCaptured) {
                         s_keyEditor.pendingCode = captured;
+                        s_keyEditor.requiresModifier = capturedRequiresModifier;
                     } else if (result == CaptureResult::kCancelled) {
                         if (s_keyEditor.isNewKey) {
                             CloseEditors();
@@ -1555,7 +1624,11 @@ namespace Hotkeys {
                     }
                 }
             } else {
-                Text("Key: %s", s_keyEditor.key ? KeyName(s_keyEditor.key->idCode).c_str() : "(none)");
+                Text("Key: %s", s_keyEditor.key
+                                     ? KeyWithModifierLabel(s_keyEditor.key->idCode, s_keyEditor.requiresModifier, settings.modifierKeyCode,
+                                                             settings.modifierGamepadCode)
+                                           .c_str()
+                                     : "(none)");
             }
 
             static TypeaheadState pressTypeahead;
@@ -1574,17 +1647,31 @@ namespace Hotkeys {
         void RenderActionEditor() {
             Separator();
             TextColored(ImVec4{0.9f, 0.9f, 0.3f, 1.0f}, "Editing Action");
-            Text("Key: %s", BindKeyLabel(s_actionEditor.targetKey, HotkeyManager::GetSingleton()->GetSettings().modifierKeyCode).c_str());
+            Text("Key: %s", BindKeyLabel(s_actionEditor.targetKey, HotkeyManager::GetSingleton()->GetSettings().modifierKeyCode, HotkeyManager::GetSingleton()->GetSettings().modifierGamepadCode).c_str());
 
             if (s_actionEditor.actionType != ActionType::kPanic && s_actionEditor.actionType != ActionType::kTogglePOV &&
-                s_actionEditor.actionType != ActionType::kMovement) {
+                s_actionEditor.actionType != ActionType::kMovement && s_actionEditor.actionType != ActionType::kOpenMenu &&
+                s_actionEditor.actionType != ActionType::kReadySheath &&
+                s_actionEditor.actionType != ActionType::kToggleSneak && s_actionEditor.actionType != ActionType::kToggleAutoMove &&
+                s_actionEditor.actionType != ActionType::kJump && s_actionEditor.actionType != ActionType::kToggleFreeCam &&
+                s_actionEditor.actionType != ActionType::kToggleFreeCamPaused &&
+                s_actionEditor.actionType != ActionType::kToggleSprint &&
+                s_actionEditor.actionType != ActionType::kQuickSave && s_actionEditor.actionType != ActionType::kQuickLoad &&
+                s_actionEditor.actionType != ActionType::kToggleMenus) {
                 if (Checkbox("From Plugins", &s_actionEditor.fromPlugins)) {
                     ResetActionPickers(s_actionEditor);
                 }
             }
 
             if (s_actionEditor.actionType != ActionType::kPanic && s_actionEditor.actionType != ActionType::kTogglePOV &&
-                s_actionEditor.actionType != ActionType::kMovement) {
+                s_actionEditor.actionType != ActionType::kMovement && s_actionEditor.actionType != ActionType::kOpenMenu &&
+                s_actionEditor.actionType != ActionType::kReadySheath &&
+                s_actionEditor.actionType != ActionType::kToggleSneak && s_actionEditor.actionType != ActionType::kToggleAutoMove &&
+                s_actionEditor.actionType != ActionType::kJump && s_actionEditor.actionType != ActionType::kToggleFreeCam &&
+                s_actionEditor.actionType != ActionType::kToggleFreeCamPaused &&
+                s_actionEditor.actionType != ActionType::kToggleSprint &&
+                s_actionEditor.actionType != ActionType::kQuickSave && s_actionEditor.actionType != ActionType::kQuickLoad &&
+                s_actionEditor.actionType != ActionType::kToggleMenus) {
                 SameLine();
                 Checkbox("Add if missing", &s_actionEditor.addIfMissing);
             }
@@ -1742,6 +1829,39 @@ namespace Hotkeys {
                 case ActionType::kTogglePOV:
                     TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Switches between 1st and 3rd person view.");
                     break;
+                case ActionType::kReadySheath:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Draws or sheathes your weapon/magic, whichever you aren't currently doing.");
+                    break;
+                case ActionType::kToggleSneak:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Toggles sneaking, the same as tapping your Sneak key.");
+                    break;
+                case ActionType::kToggleAutoMove:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Toggles auto-move, the same as tapping your Auto-Move key.");
+                    break;
+                case ActionType::kJump:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Makes you jump, the same as tapping your Jump key. Doesn't toggle.");
+                    break;
+                case ActionType::kToggleFreeCam:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Toggles free-flying camera, the same as the \"tfc\" console command.");
+                    break;
+                case ActionType::kToggleFreeCamPaused:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                                "Toggles free-flying camera and freezes time, the same as the \"tfc 1\" console command.");
+                    break;
+                case ActionType::kToggleSprint:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                                "Toggles sprinting on/off persistently instead of requiring it held - handy for gamepads.");
+                    break;
+                case ActionType::kQuickSave:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Quick-saves, the same as tapping your Quicksave key. Doesn't toggle.");
+                    break;
+                case ActionType::kQuickLoad:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Quick-loads, the same as tapping your Quickload key. Doesn't toggle.");
+                    break;
+                case ActionType::kToggleMenus:
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                                "Toggles HUD/menu visibility, the same as the \"tm\" console command. Doesn't close any open menu.");
+                    break;
                 case ActionType::kMovement: {
                     static TypeaheadState movementDirectionTypeahead;
                     Text("Direction");
@@ -1752,6 +1872,15 @@ namespace Hotkeys {
                     TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
                                 "Moves in this direction for as long as the key is held - remaps that key's own movement rather than "
                                 "adding to it, and ignores the Press setting above (Tap/Hold doesn't apply to Movement).");
+                    break;
+                }
+                case ActionType::kOpenMenu: {
+                    for (int i = 0; i < kOpenMenuTargetCount; ++i) {
+                        RadioButton(kOpenMenuTargetDisplayNames[i], &s_actionEditor.openMenuTargetIndex, i);
+                    }
+                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                                "Opens the selected menu, the same as Skyrim's own hotkey for it - pressing a different Open Menu bind "
+                                "while one of these is already open switches directly to it.");
                     break;
                 }
                 case ActionType::kPanic: {
@@ -1945,8 +2074,22 @@ namespace Hotkeys {
                     }
                     case ActionType::kTogglePOV:
                         break;
+                    case ActionType::kReadySheath:
+                    case ActionType::kToggleSneak:
+                    case ActionType::kToggleAutoMove:
+                    case ActionType::kJump:
+                    case ActionType::kToggleFreeCam:
+                    case ActionType::kToggleFreeCamPaused:
+                    case ActionType::kToggleSprint:
+                    case ActionType::kQuickSave:
+                    case ActionType::kQuickLoad:
+                    case ActionType::kToggleMenus:
+                        break;
                     case ActionType::kMovement:
                         fields["Direction"] = kMovementDirectionNames[s_actionEditor.movementDirectionIndex];
+                        break;
+                    case ActionType::kOpenMenu:
+                        fields["Target"] = kOpenMenuTargetNames[s_actionEditor.openMenuTargetIndex];
                         break;
                     case ActionType::kPanic: {
                         if (!s_actionEditor.unequipItems.empty()) {
@@ -2027,8 +2170,28 @@ namespace Hotkeys {
                 settingsDirty = true;
             }
             TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                        "Only affects Magic, Favorites, Container, Barter, Map, Journal, and Book menus - other menus "
-                        "always block hotkeys.");
+                        "Only affects Favorites, Container, Barter, Journal, and Book menus - other menus always block "
+                        "hotkeys.");
+
+            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Block hotkeys while these menus are open:");
+            if (Checkbox("Inventory##BlockMenu", &settings.blockHotkeysInInventoryMenu)) {
+                settingsDirty = true;
+            }
+            SameLine();
+            if (Checkbox("Spells##BlockMenu", &settings.blockHotkeysInMagicMenu)) {
+                settingsDirty = true;
+            }
+            SameLine();
+            if (Checkbox("Map##BlockMenu", &settings.blockHotkeysInMapMenu)) {
+                settingsDirty = true;
+            }
+            SameLine();
+            if (Checkbox("Skills##BlockMenu", &settings.blockHotkeysInStatsMenu)) {
+                settingsDirty = true;
+            }
+            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
+                        "Also only matters with something like Skyrim Souls - lets an Open Menu bind switch to/from "
+                        "whichever of these you leave unchecked while a different one is already open.");
 
             if (settingsDirty) {
                 manager->SetSettings(settings);
@@ -2045,6 +2208,14 @@ namespace Hotkeys {
             SameLine();
             PushID("ModifierKeyCapture");
             if (RenderCaptureButton(CaptureTarget::kModifierKey, settings.modifierKeyCode) == CaptureResult::kCaptured) {
+                settingsDirty = true;
+            }
+            PopID();
+
+            Text("Gamepad Modifier: %s", KeyName(settings.modifierGamepadCode).c_str());
+            SameLine();
+            PushID("GamepadModifierCapture");
+            if (RenderCaptureButton(CaptureTarget::kGamepadModifier, settings.modifierGamepadCode) == CaptureResult::kCaptured) {
                 settingsDirty = true;
             }
             PopID();
@@ -2136,7 +2307,7 @@ namespace Hotkeys {
                     PushID(static_cast<int>(summary.key.idCode * 4 + (summary.key.modifierHeld ? 2u : 0u) + (summary.key.press == PressType::kHold ? 1u : 0u)));
 
                     TableNextColumn();
-                    Text("%s", BindKeyLabel(summary.key, settings.modifierKeyCode).c_str());
+                    Text("%s", BindKeyLabel(summary.key, settings.modifierKeyCode, settings.modifierGamepadCode).c_str());
                     bool isThisRowEditing = s_keyEditor.active && s_keyEditor.key && *s_keyEditor.key == summary.key;
                     if (SmallButton(isThisRowEditing ? "Cancel Edit" : "Edit")) {
                         if (isThisRowEditing) {
@@ -2151,7 +2322,7 @@ namespace Hotkeys {
                                                   (s_actionEditor.active && s_actionEditor.targetKey == summary.key);
                         BindKey deleteKey = summary.key;
                         RequestConfirm(std::format("Delete the key bind \"{}\" and everything it does? This can't be undone.",
-                                                    BindKeyLabel(summary.key, settings.modifierKeyCode)),
+                                                    BindKeyLabel(summary.key, settings.modifierKeyCode, settings.modifierGamepadCode)),
                                        "Delete", [manager, deleteKey, wasEditingThisRow]() {
                                            manager->RemoveBind(deleteKey);
                                            MaybeSaveActiveProfile(manager);
@@ -2202,7 +2373,7 @@ namespace Hotkeys {
                                         continue;
                                     }
                                     copyTargets.push_back(other.key);
-                                    copyTargetLabels.push_back(BindKeyLabel(other.key, settings.modifierKeyCode));
+                                    copyTargetLabels.push_back(BindKeyLabel(other.key, settings.modifierKeyCode, settings.modifierGamepadCode));
                                 }
 
                                 if (copyTargets.empty()) {
@@ -2252,7 +2423,7 @@ namespace Hotkeys {
                                     BindKey deleteKey = summary.key;
                                     ActionType deleteType = action.type;
                                     RequestConfirm(std::format("Delete the \"{}\" action from \"{}\"? This can't be undone.",
-                                                                action.displayName, BindKeyLabel(summary.key, settings.modifierKeyCode)),
+                                                                action.displayName, BindKeyLabel(summary.key, settings.modifierKeyCode, settings.modifierGamepadCode)),
                                                    "Delete", [manager, deleteKey, deleteType]() {
                                                        manager->ClearBindAction(deleteKey, deleteType);
                                                        MaybeSaveActiveProfile(manager);
@@ -2446,8 +2617,9 @@ namespace Hotkeys {
             SameLine();
             PushID("ProfileCycleKeyCapture");
             std::uint32_t capturedCycleKey = profileCycleKeyCode;
-            if (RenderCaptureButton(CaptureTarget::kProfileCycleKey, capturedCycleKey) == CaptureResult::kCaptured) {
-                SetProfileCycleKeyWithConfirm(manager, capturedCycleKey, profileCycleRequiresModifier);
+            bool capturedCycleRequiresModifier = profileCycleRequiresModifier;
+            if (RenderCaptureButton(CaptureTarget::kProfileCycleKey, capturedCycleKey, &capturedCycleRequiresModifier) == CaptureResult::kCaptured) {
+                SetProfileCycleKeyWithConfirm(manager, capturedCycleKey, capturedCycleRequiresModifier);
             }
             if (profileCycleKeyCode != 0 && s_captureTarget != CaptureTarget::kProfileCycleKey) {
                 SameLine();

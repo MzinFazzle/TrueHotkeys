@@ -16,7 +16,7 @@ cmake_minimum_required(VERSION 3.21)
 # Project name - this becomes the name of your SKSE .dll file, your plugin's
 # display name in skse64.log, and (via SKSE::PluginDeclaration) the name your
 # own log file is written under.
-project(TrueHotkeys VERSION 1.3.9 LANGUAGES CXX)
+project(TrueHotkeys VERSION 1.3.10 LANGUAGES CXX)
 
 # #
 # YOU DO NOT NEED TO EDIT ANYTHING BELOW HERE

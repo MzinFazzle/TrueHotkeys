@@ -3,6 +3,7 @@
 
 #include "Hotkeys/FormRef.h"
 #include "Hotkeys/HotkeyAction.h"
+#include "Hotkeys/Locale.h"
 
 #include <memory>
 #include <string>
@@ -138,7 +139,7 @@ namespace Hotkeys {
     class TogglePOVAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kTogglePOV; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Toggle POV"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.toggle_pov"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:TogglePOV"; }
     };
@@ -146,7 +147,7 @@ namespace Hotkeys {
     class ReadySheathAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kReadySheath; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Ready/Sheath"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.ready_sheath"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:ReadySheath"; }
     };
@@ -154,7 +155,7 @@ namespace Hotkeys {
     class ToggleSneakAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kToggleSneak; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Toggle Sneak"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.toggle_sneak"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:ToggleSneak"; }
     };
@@ -162,7 +163,7 @@ namespace Hotkeys {
     class ToggleAutoMoveAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kToggleAutoMove; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Toggle Auto Move"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.toggle_auto_move"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:ToggleAutoMove"; }
     };
@@ -170,7 +171,7 @@ namespace Hotkeys {
     class JumpAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kJump; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Jump"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.jump"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:Jump"; }
     };
@@ -178,7 +179,7 @@ namespace Hotkeys {
     class ToggleFreeCamAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kToggleFreeCam; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Toggle FreeCam"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.toggle_freecam"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:ToggleFreeCam"; }
     };
@@ -186,7 +187,7 @@ namespace Hotkeys {
     class ToggleFreeCamPausedAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kToggleFreeCamPaused; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Toggle FreeCam (Paused)"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.toggle_freecam_paused"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:ToggleFreeCamPaused"; }
     };
@@ -195,7 +196,7 @@ namespace Hotkeys {
     class ToggleSprintAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kToggleSprint; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Toggle Sprint"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.toggle_sprint"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:ToggleSprint"; }
     };
@@ -203,7 +204,7 @@ namespace Hotkeys {
     class QuickSaveAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kQuickSave; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Quick Save"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.quick_save"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:QuickSave"; }
     };
@@ -211,7 +212,7 @@ namespace Hotkeys {
     class QuickLoadAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kQuickLoad; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Quick Load"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.quick_load"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:QuickLoad"; }
     };
@@ -222,7 +223,7 @@ namespace Hotkeys {
             m_preferSmaller(a_preferSmaller), m_maxSize(a_maxSize), m_notify(a_notify) {}
 
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kRechargeWeapon; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Recharge Weapon"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.recharge_weapon"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override;
 
@@ -238,7 +239,9 @@ namespace Hotkeys {
             m_preferSmaller(a_preferSmaller), m_maxSize(a_maxSize), m_notify(a_notify) {}
 
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kRechargeWeaponLeftHand; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Recharge Weapon (Left Hand)"; }
+        [[nodiscard]] std::string GetDisplayName() const override {
+            return Locale::GetSingleton()->T("actiontype.recharge_weapon_left_hand");
+        }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override;
 
@@ -251,7 +254,7 @@ namespace Hotkeys {
     class ToggleMenusAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kToggleMenus; }
-        [[nodiscard]] std::string GetDisplayName() const override { return "Toggle Menus"; }
+        [[nodiscard]] std::string GetDisplayName() const override { return Locale::GetSingleton()->T("actiontype.toggle_menus"); }
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:ToggleMenus"; }
     };

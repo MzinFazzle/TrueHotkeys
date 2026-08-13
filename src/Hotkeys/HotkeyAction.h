@@ -28,6 +28,8 @@ namespace Hotkeys {
         kOpenMenu,
         kQuickSave,
         kQuickLoad,
+        kRechargeWeapon,
+        kRechargeWeaponLeftHand,
     };
 
     enum class Hand : std::uint8_t {

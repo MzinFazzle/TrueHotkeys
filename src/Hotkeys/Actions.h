@@ -216,6 +216,38 @@ namespace Hotkeys {
         [[nodiscard]] std::string Serialize() const override { return "Type:QuickLoad"; }
     };
 
+    class RechargeWeaponAction final : public IHotkeyAction {
+    public:
+        explicit RechargeWeaponAction(bool a_preferSmaller = true, std::uint8_t a_maxSize = 5, bool a_notify = false) :
+            m_preferSmaller(a_preferSmaller), m_maxSize(a_maxSize), m_notify(a_notify) {}
+
+        [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kRechargeWeapon; }
+        [[nodiscard]] std::string GetDisplayName() const override { return "Recharge Weapon"; }
+        void Execute(RE::Actor* a_actor) const override;
+        [[nodiscard]] std::string Serialize() const override;
+
+    private:
+        bool m_preferSmaller;
+        std::uint8_t m_maxSize;
+        bool m_notify;
+    };
+
+    class RechargeWeaponLeftHandAction final : public IHotkeyAction {
+    public:
+        explicit RechargeWeaponLeftHandAction(bool a_preferSmaller = true, std::uint8_t a_maxSize = 5, bool a_notify = false) :
+            m_preferSmaller(a_preferSmaller), m_maxSize(a_maxSize), m_notify(a_notify) {}
+
+        [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kRechargeWeaponLeftHand; }
+        [[nodiscard]] std::string GetDisplayName() const override { return "Recharge Weapon (Left Hand)"; }
+        void Execute(RE::Actor* a_actor) const override;
+        [[nodiscard]] std::string Serialize() const override;
+
+    private:
+        bool m_preferSmaller;
+        std::uint8_t m_maxSize;
+        bool m_notify;
+    };
+
     class ToggleMenusAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kToggleMenus; }

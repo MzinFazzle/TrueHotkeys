@@ -2,16 +2,23 @@
 
 #include "Hotkeys/ContinuousMovement.h"
 #include "Hotkeys/EditorIDLookup.h"
+#include "Hotkeys/HotkeyManager.h"
+#include "Hotkeys/Locale.h"
 #include "Hotkeys/SyntheticTap.h"
 #include "Hotkeys/ToggleSprint.h"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <format>
 #include <string_view>
 #include <utility>
 
 namespace Hotkeys {
     namespace {
+        [[nodiscard]] const char* T(std::string_view a_key) { return Locale::GetSingleton()->T(a_key); }
+
         [[nodiscard]] RE::BGSEquipSlot* GetLeftHandSlot() {
             auto* objManager = RE::BGSDefaultObjectManager::GetSingleton();
             return objManager ? objManager->GetObject<RE::BGSEquipSlot>(RE::DEFAULT_OBJECT::kLeftHandEquip) : nullptr;
@@ -48,6 +55,122 @@ namespace Hotkeys {
                 }
             }
             return false;
+        }
+
+        constexpr std::array<float, 6> kSoulGemPointValue = {0.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 3000.0f};
+
+        [[nodiscard]] float SoulGemChargeValue(RE::SOUL_LEVEL a_soul) {
+            auto index = static_cast<std::size_t>(a_soul);
+            return index < kSoulGemPointValue.size() ? kSoulGemPointValue[index] : 0.0f;
+        }
+
+        struct SoulGemCandidate {
+            RE::TESBoundObject* form = nullptr;
+            RE::ExtraDataList* extraList = nullptr;
+            RE::SOUL_LEVEL soul = RE::SOUL_LEVEL::kNone;
+            float chargeValue = 0.0f;
+        };
+
+        void RechargeEquippedWeapon(RE::Actor* a_actor, bool a_leftHand, bool a_preferSmaller, std::uint8_t a_maxSize, bool a_notify) {
+            if (!a_actor) {
+                return;
+            }
+
+            auto* rightEquipped = a_actor->GetEquippedObject(false);
+            auto* handEquipped = a_actor->GetEquippedObject(a_leftHand);
+            if (!handEquipped || (a_leftHand && handEquipped == rightEquipped)) {
+                return;
+            }
+
+            auto* weapon = handEquipped->As<RE::TESObjectWEAP>();
+            if (!weapon) {
+                return;  // torch, shield, spell, etc. - nothing to recharge
+            }
+
+            auto* entryData = a_actor->GetEquippedEntryData(a_leftHand);
+            auto* enchantable = weapon->As<RE::TESEnchantableForm>();
+            bool entryEnchanted = entryData && entryData->IsEnchanted();
+            bool baseEnchanted = enchantable && enchantable->formEnchanting;
+            bool isEnchanted = entryEnchanted || baseEnchanted;
+            if (!isEnchanted) {
+                return;  // not enchanted
+            }
+
+            auto chargeAV = a_leftHand ? RE::ActorValue::kLeftItemCharge : RE::ActorValue::kRightItemCharge;
+            float maxCharge = a_actor->AsActorValueOwner()->GetBaseActorValue(chargeAV);
+            float currentCharge = a_actor->AsActorValueOwner()->GetActorValue(chargeAV);
+            if (maxCharge <= 0.0f) {
+                return;
+            }
+            if (currentCharge >= maxCharge) {
+                return;  // already full
+            }
+
+            auto inventory = a_actor->GetInventory([](RE::TESBoundObject& a_obj) { return a_obj.Is(RE::FormType::SoulGem); });
+
+            std::vector<SoulGemCandidate> candidates;
+            for (auto& [obj, entry] : inventory) {
+                auto& [count, data] = entry;
+                if (count <= 0) {
+                    continue;
+                }
+                auto* soulGemForm = obj->As<RE::TESSoulGem>();
+                if (!soulGemForm) {
+                    continue;
+                }
+                if (obj->GetFormID() == 0x00063B27 || obj->GetFormID() == 0x00063B29) {
+                    continue;
+                }
+
+                bool sawSoulOverride = false;
+                if (data && data->extraLists) {
+                    for (auto* list : *data->extraLists) {
+                        if (!list || !list->HasType<RE::ExtraSoul>()) {
+                            continue;  // no soul override on this specific instance - not this gem's soul data
+                        }
+                        sawSoulOverride = true;
+                        auto soul = list->GetSoulLevel();
+                        if (soul == RE::SOUL_LEVEL::kNone) {
+                            continue;  // this specific variant is an empty gem
+                        }
+                        if (static_cast<std::uint8_t>(soul) > a_maxSize) {
+                            continue;  // excluded by the "never use above size X" cap
+                        }
+                        candidates.push_back({obj, list, soul, SoulGemChargeValue(soul)});
+                    }
+                }
+                if (!sawSoulOverride) {
+                    auto soul = soulGemForm->GetContainedSoul();
+                    if (soul != RE::SOUL_LEVEL::kNone && static_cast<std::uint8_t>(soul) <= a_maxSize) {
+                        candidates.push_back({obj, nullptr, soul, SoulGemChargeValue(soul)});
+                    }
+                }
+            }
+
+            if (candidates.empty()) {
+                return;  // no eligible soul gem owned
+            }
+
+            auto best = std::min_element(candidates.begin(), candidates.end(), [&](const SoulGemCandidate& a, const SoulGemCandidate& b) {
+                return a_preferSmaller ? a.chargeValue < b.chargeValue : a.chargeValue > b.chargeValue;
+            });
+
+            auto* soulSqueezerForm = RE::TESDataHandler::GetSingleton()->LookupForm(0x58F7C, "Skyrim.esm");
+            auto* soulSqueezerPerk = soulSqueezerForm ? soulSqueezerForm->As<RE::BGSPerk>() : nullptr;
+            bool hasSoulSqueezer = soulSqueezerPerk && a_actor->HasPerk(soulSqueezerPerk);
+            float chargeValue = best->chargeValue + (hasSoulSqueezer ? 250.0f : 0.0f);
+
+            float delta = std::min(chargeValue, maxCharge - currentCharge);
+            if (delta <= 0.0f) {
+                return;
+            }
+            a_actor->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, chargeAV, delta);
+
+            a_actor->RemoveItem(best->form, 1, RE::ITEM_REMOVE_REASON::kRemove, best->extraList, nullptr);
+
+            if (a_notify) {
+                HotkeyManager::GetSingleton()->Notify(TF("actiontype.recharge.notify_message", weapon->GetName(), best->form->GetName()));
+            }
         }
 
         [[nodiscard]] bool GrantIfAllowed(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool a_addIfMissing) {
@@ -381,6 +504,10 @@ namespace Hotkeys {
                 return "QuickLoad";
             case ActionType::kToggleMenus:
                 return "ToggleMenus";
+            case ActionType::kRechargeWeapon:
+                return "RechargeWeapon";
+            case ActionType::kRechargeWeaponLeftHand:
+                return "RechargeWeaponLeftHand";
         }
         return "Unknown";
     }
@@ -434,37 +561,37 @@ namespace Hotkeys {
     std::string_view ToDisplayString(OpenMenuTarget a_target) noexcept {
         switch (a_target) {
             case OpenMenuTarget::kInventory:
-                return "Inventory";
+                return T("actioneditor.openmenu.inventory");
             case OpenMenuTarget::kSpells:
-                return "Spells";
+                return T("actioneditor.openmenu.spells");
             case OpenMenuTarget::kMap:
-                return "Map";
+                return T("actioneditor.openmenu.map");
             case OpenMenuTarget::kSkills:
-                return "Skills";
+                return T("actioneditor.openmenu.skills");
             case OpenMenuTarget::kFavorites:
-                return "Favorites";
+                return T("actioneditor.openmenu.favorites");
             case OpenMenuTarget::kWaitRest:
-                return "Wait/Rest";
+                return T("actioneditor.openmenu.wait_rest");
         }
-        return "Unknown";
+        return T("common.unknown");
     }
 
 
     std::string WeaponSetAction::GetDisplayName() const {
-        std::string name = "Weapon:";
+        std::string name = T("actiontype.weapon.label");
         if (m_right) {
-            name += std::format(" {}", m_right->ToDisplayString());
+            name += TF("actiontype.weapon.item_suffix", m_right->ToDisplayString());
             if (m_left) {
-                name += std::format(" + {}", m_left->ToDisplayString());
+                name += TF("actiontype.weapon.plus_item_suffix", m_left->ToDisplayString());
             }
         } else if (m_left) {
-            name += std::format(" {} (Left Hand)", m_left->ToDisplayString());
+            name += TF("actiontype.weapon.left_hand_suffix", m_left->ToDisplayString());
         }
         if (m_ammo) {
-            name += std::format(" ({})", m_ammo->ToDisplayString());
+            name += TF("actiontype.weapon.ammo_suffix", m_ammo->ToDisplayString());
         }
         if (m_addIfMissing) {
-            name += " [grants missing]";
+            name += T("common.grants_missing_suffix");
         }
         return name;
     }
@@ -571,21 +698,21 @@ namespace Hotkeys {
 
 
     std::string OutfitAction::GetDisplayName() const {
-        std::string suffix = m_unequipEverythingElse ? " (strips everything first)" : "";
+        std::string suffix = m_unequipEverythingElse ? T("actiontype.outfit.strips_everything_suffix") : "";
         if (m_addIfMissing) {
-            suffix += " [grants missing]";
+            suffix += T("common.grants_missing_suffix");
         }
         if (m_outfitForm) {
             if (auto* outfit = m_outfitForm->Resolve<RE::BGSOutfit>()) {
                 std::string editorID = EditorIDLookup::Get(outfit->GetFormID());
                 if (!editorID.empty()) {
-                    return std::format("Outfit: {}{}", editorID, suffix);
+                    return TF("actiontype.outfit.display", editorID, suffix);
                 }
             }
-            return std::format("Outfit: {}{}", m_outfitForm->ToDisplayString(), suffix);
+            return TF("actiontype.outfit.display", m_outfitForm->ToDisplayString(), suffix);
         }
-        std::string label = m_customName.empty() ? "Outfit" : std::format("Outfit ({})", m_customName);
-        return std::format("{}: {} item(s){}", label, m_items.size(), suffix);
+        std::string label = m_customName.empty() ? T("actiontype.outfit.label") : TF("actiontype.outfit.label_with_name", m_customName);
+        return TF("actiontype.outfit.item_count_display", label, m_items.size(), suffix);
     }
 
     void OutfitAction::Execute(RE::Actor* a_actor) const {
@@ -685,15 +812,15 @@ namespace Hotkeys {
 
 
     std::string SpellAction::GetDisplayName() const {
-        std::string name = "Spell:";
+        std::string name = T("actiontype.spell.label");
         if (m_right) {
-            name += std::format(" R={}", m_right->ToDisplayString());
+            name += TF("actiontype.spell.right_suffix", m_right->ToDisplayString());
         }
         if (m_left) {
-            name += std::format(" L={}", m_left->ToDisplayString());
+            name += TF("actiontype.spell.left_suffix", m_left->ToDisplayString());
         }
         if (m_addIfMissing) {
-            name += " [grants missing]";
+            name += T("common.grants_missing_suffix");
         }
         return name;
     }
@@ -768,8 +895,8 @@ namespace Hotkeys {
 
 
     std::string ShoutAction::GetDisplayName() const {
-        std::string suffix = m_addIfMissing ? " [grants missing]" : "";
-        return std::format("Shout: {}{}", m_shout.ToDisplayString(), suffix);
+        std::string suffix = m_addIfMissing ? T("common.grants_missing_suffix") : "";
+        return TF("actiontype.shout.display", m_shout.ToDisplayString(), suffix);
     }
 
     void ShoutAction::Execute(RE::Actor* a_actor) const {
@@ -798,8 +925,8 @@ namespace Hotkeys {
 
 
     std::string ConsumableAction::GetDisplayName() const {
-        std::string suffix = m_addIfMissing ? " [grants missing]" : "";
-        return std::format("Use: {}{}", m_item.ToDisplayString(), suffix);
+        std::string suffix = m_addIfMissing ? T("common.grants_missing_suffix") : "";
+        return TF("actiontype.consumable.display", m_item.ToDisplayString(), suffix);
     }
 
     void ConsumableAction::Execute(RE::Actor* a_actor) const {
@@ -817,8 +944,8 @@ namespace Hotkeys {
 
 
     std::string AmmoSwapAction::GetDisplayName() const {
-        std::string suffix = m_addIfMissing ? " [grants missing]" : "";
-        return std::format("Ammo: {}{}", m_ammo.ToDisplayString(), suffix);
+        std::string suffix = m_addIfMissing ? T("common.grants_missing_suffix") : "";
+        return TF("actiontype.ammo.display", m_ammo.ToDisplayString(), suffix);
     }
 
     void AmmoSwapAction::Execute(RE::Actor* a_actor) const {
@@ -836,8 +963,8 @@ namespace Hotkeys {
 
 
     std::string ToggleTorchAction::GetDisplayName() const {
-        std::string suffix = m_addIfMissing ? " [grants missing]" : "";
-        return std::format("Toggle Torch: {}{}", m_torch.ToDisplayString(), suffix);
+        std::string suffix = m_addIfMissing ? T("common.grants_missing_suffix") : "";
+        return TF("actiontype.toggle_torch.display", m_torch.ToDisplayString(), suffix);
     }
 
     void ToggleTorchAction::Execute(RE::Actor* a_actor) const {
@@ -973,19 +1100,37 @@ namespace Hotkeys {
         }
     }
 
+    void RechargeWeaponAction::Execute(RE::Actor* a_actor) const {
+        RechargeEquippedWeapon(a_actor, false, m_preferSmaller, m_maxSize, m_notify);
+    }
+
+    std::string RechargeWeaponAction::Serialize() const {
+        return std::format("Type:RechargeWeapon|PreferSmaller:{}|MaxSize:{}|Notify:{}", m_preferSmaller ? 1 : 0,
+                            static_cast<int>(m_maxSize), m_notify ? 1 : 0);
+    }
+
+    void RechargeWeaponLeftHandAction::Execute(RE::Actor* a_actor) const {
+        RechargeEquippedWeapon(a_actor, true, m_preferSmaller, m_maxSize, m_notify);
+    }
+
+    std::string RechargeWeaponLeftHandAction::Serialize() const {
+        return std::format("Type:RechargeWeaponLeftHand|PreferSmaller:{}|MaxSize:{}|Notify:{}", m_preferSmaller ? 1 : 0,
+                            static_cast<int>(m_maxSize), m_notify ? 1 : 0);
+    }
+
 
     std::string MovementAction::GetDisplayName() const {
         switch (m_direction) {
             case MovementDirection::kForward:
-                return "Movement: Move Forward";
+                return T("actiontype.movement.forward");
             case MovementDirection::kBackward:
-                return "Movement: Move Backward";
+                return T("actiontype.movement.backward");
             case MovementDirection::kStrafeLeft:
-                return "Movement: Strafe Left";
+                return T("actiontype.movement.strafe_left");
             case MovementDirection::kStrafeRight:
-                return "Movement: Strafe Right";
+                return T("actiontype.movement.strafe_right");
         }
-        return "Movement";
+        return T("actiontype.movement.label");
     }
 
     void MovementAction::Execute(RE::Actor* a_actor) const {
@@ -1001,7 +1146,7 @@ namespace Hotkeys {
     std::string MovementAction::Serialize() const { return std::format("Type:Movement|Direction:{}", ToString(m_direction)); }
 
 
-    std::string OpenMenuAction::GetDisplayName() const { return std::format("Open Menu: {}", ToDisplayString(m_target)); }
+    std::string OpenMenuAction::GetDisplayName() const { return TF("actiontype.open_menu.display", ToDisplayString(m_target)); }
 
     namespace {
         void ShowSleepWaitMenu(bool a_sleep) {
@@ -1058,18 +1203,21 @@ namespace Hotkeys {
                 }
                 names += m_specificItems[i].ToDisplayString();
             }
-            return std::format("Unequip: {}", names);
+            return TF("actiontype.panic.unequip_display", names);
         }
         std::string categories;
-        if (m_categories.weapons) categories += "Weapons,";
-        if (m_categories.spells) categories += "Spells,";
-        if (m_categories.armor) categories += "Armor,";
-        if (m_categories.shouts) categories += "Shouts,";
-        if (m_categories.ammo) categories += "Ammo,";
-        if (!categories.empty()) {
-            categories.pop_back();
-        }
-        return std::format("Unequip: {}", categories.empty() ? "(nothing selected)" : categories);
+        auto appendCategory = [&categories](const char* a_word) {
+            if (!categories.empty()) {
+                categories += ",";
+            }
+            categories += a_word;
+        };
+        if (m_categories.weapons) appendCategory(T("actiontype.panic.category_weapons"));
+        if (m_categories.spells) appendCategory(T("actiontype.panic.category_spells"));
+        if (m_categories.armor) appendCategory(T("actiontype.panic.category_armor"));
+        if (m_categories.shouts) appendCategory(T("actiontype.panic.category_shouts"));
+        if (m_categories.ammo) appendCategory(T("actiontype.panic.category_ammo"));
+        return TF("actiontype.panic.unequip_display", categories.empty() ? T("actiontype.panic.nothing_selected") : categories);
     }
 
     void PanicAction::Execute(RE::Actor* a_actor) const {
@@ -1396,6 +1544,44 @@ namespace Hotkeys {
 
         if (*type == "ToggleMenus") {
             return std::make_unique<ToggleMenusAction>();
+        }
+
+        if (*type == "RechargeWeapon") {
+            bool preferSmaller = true;
+            if (const auto* preferSmallerStr = FindField(a_fields, "PreferSmaller")) {
+                preferSmaller = (*preferSmallerStr == "1");
+            }
+            std::uint8_t maxSize = 5;
+            if (const auto* maxSizeStr = FindField(a_fields, "MaxSize")) {
+                auto parsed = std::atoi(maxSizeStr->c_str());
+                if (parsed >= 0 && parsed <= 5) {
+                    maxSize = static_cast<std::uint8_t>(parsed);
+                }
+            }
+            bool notify = false;
+            if (const auto* notifyStr = FindField(a_fields, "Notify")) {
+                notify = (*notifyStr == "1");
+            }
+            return std::make_unique<RechargeWeaponAction>(preferSmaller, maxSize, notify);
+        }
+
+        if (*type == "RechargeWeaponLeftHand") {
+            bool preferSmaller = true;
+            if (const auto* preferSmallerStr = FindField(a_fields, "PreferSmaller")) {
+                preferSmaller = (*preferSmallerStr == "1");
+            }
+            std::uint8_t maxSize = 5;
+            if (const auto* maxSizeStr = FindField(a_fields, "MaxSize")) {
+                auto parsed = std::atoi(maxSizeStr->c_str());
+                if (parsed >= 0 && parsed <= 5) {
+                    maxSize = static_cast<std::uint8_t>(parsed);
+                }
+            }
+            bool notify = false;
+            if (const auto* notifyStr = FindField(a_fields, "Notify")) {
+                notify = (*notifyStr == "1");
+            }
+            return std::make_unique<RechargeWeaponLeftHandAction>(preferSmaller, maxSize, notify);
         }
 
         if (*type == "Movement") {

@@ -41,6 +41,11 @@ namespace Hotkeys {
         bool autoSaveProfileChanges = true;
         bool allowHotkeysInGameMenus = false;
 
+
+        bool modifierBlocksVanillaHotkey = false;
+
+        std::string language = "English";
+
         bool blockHotkeysInInventoryMenu = true;
         bool blockHotkeysInMagicMenu = true;
         bool blockHotkeysInMapMenu = true;
@@ -120,6 +125,8 @@ namespace Hotkeys {
 
         void SetBindBlockVanillaKey(const BindKey& a_key, bool a_blockVanillaKey);
 
+        void Notify(std::string_view a_message) const;
+
     private:
         HotkeyManager() = default;
         HotkeyManager(const HotkeyManager&) = delete;
@@ -128,7 +135,6 @@ namespace Hotkeys {
         [[nodiscard]] std::filesystem::path ProfilesDirectory() const;
         [[nodiscard]] std::filesystem::path SettingsPath() const;
         void RebuildBindLookup();
-        void Notify(std::string_view a_message) const;
 
         [[nodiscard]] Profile MakeBlankProfile(std::string_view a_name) const;
 

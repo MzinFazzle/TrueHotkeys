@@ -81,6 +81,10 @@ namespace Hotkeys {
                     a_settings.blockHotkeysInMapMenu = (value == "1" || value == "true");
                 } else if (key == "BlockHotkeysInStatsMenu") {
                     a_settings.blockHotkeysInStatsMenu = (value == "1" || value == "true");
+                } else if (key == "ModifierBlocksVanillaHotkey") {
+                    a_settings.modifierBlocksVanillaHotkey = (value == "1" || value == "true");
+                } else if (key == "Language") {
+                    a_settings.language = value;
                 }
             }
         }
@@ -120,6 +124,8 @@ namespace Hotkeys {
             file << "BlockHotkeysInMagicMenu=" << (a_settings.blockHotkeysInMagicMenu ? "1" : "0") << "\n";
             file << "BlockHotkeysInMapMenu=" << (a_settings.blockHotkeysInMapMenu ? "1" : "0") << "\n";
             file << "BlockHotkeysInStatsMenu=" << (a_settings.blockHotkeysInStatsMenu ? "1" : "0") << "\n";
+            file << "ModifierBlocksVanillaHotkey=" << (a_settings.modifierBlocksVanillaHotkey ? "1" : "0") << "\n";
+            file << "Language=" << a_settings.language << "\n";
         }
     }
 

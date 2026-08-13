@@ -6,6 +6,7 @@
 #include "Hotkeys/GamepadButtons.h"
 #include "Hotkeys/HotkeyManager.h"
 #include "Hotkeys/InputHandler.h"
+#include "Hotkeys/Locale.h"
 #include "Hotkeys/Profile.h"
 
 #include "SKSEMenuFramework.h"
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <format>
 #include <functional>
 #include <optional>
@@ -24,6 +26,12 @@
 namespace Hotkeys {
     namespace {
         using namespace ImGuiMCP;
+
+        [[nodiscard]] const char* TR(std::string_view a_key) { return Locale::GetSingleton()->T(a_key); }
+
+        [[nodiscard]] std::string TRID(std::string_view a_key, std::string_view a_idSuffix) {
+            return std::format("{}{}", TR(a_key), a_idSuffix);
+        }
 
         enum class CaptureTarget { kNone, kModifierKey, kGamepadModifier, kProfileCycleKey, kBindKey };
         CaptureTarget s_captureTarget = CaptureTarget::kNone;
@@ -38,21 +46,23 @@ namespace Hotkeys {
             "Weapon",       "Ammo",      "Spell",          "Shout",         "Outfit",     "Consumable", "Panic",
             "Movement",     "ReadySheath", "Jump",          "ToggleSneak",   "ToggleSprint", "ToggleAutoMove",
             "ToggleTorch",  "TogglePOV", "ToggleFreeCam",  "ToggleFreeCamPaused", "ToggleMenus", "OpenMenu",
-            "QuickSave",    "QuickLoad"};
-        constexpr const char* kActionTypeDisplayNames[] = {
-            "Weapon",           "Ammo",     "Spell",             "Shout",          "Outfit",       "Consumable", "Unequip",
-            "Movement",         "Ready/Sheath", "Jump",          "Toggle Sneak",   "Toggle Sprint", "Toggle Auto Move",
-            "Toggle Torch",     "Toggle POV", "Toggle FreeCam",  "Toggle FreeCam (Paused)", "Toggle Menus", "Open Menu",
-            "Quick Save",       "Quick Load"};
-        constexpr int kActionTypeCount = 21;
-        constexpr const char* kPressNames[] = {"Tap", "Hold"};
-        constexpr const char* kOutfitModeNames[] = {"Individual Items", "Outfit Record"};
+            "QuickSave",    "QuickLoad", "RechargeWeapon", "RechargeWeaponLeftHand"};
+        constexpr const char* kActionTypeDisplayKeys[] = {
+            "actiontype.weapon",       "actiontype.ammo",      "actiontype.spell",       "actiontype.shout",
+            "actiontype.outfit",       "actiontype.consumable", "actiontype.unequip",     "actiontype.movement",
+            "actiontype.ready_sheath", "actiontype.jump",      "actiontype.toggle_sneak", "actiontype.toggle_sprint",
+            "actiontype.toggle_auto_move", "actiontype.toggle_torch", "actiontype.toggle_pov", "actiontype.toggle_freecam",
+            "actiontype.toggle_freecam_paused", "actiontype.toggle_menus", "actiontype.open_menu", "actiontype.quick_save",
+            "actiontype.quick_load",   "actiontype.recharge_weapon", "actiontype.recharge_weapon_left_hand"};
+        constexpr int kActionTypeCount = 23;
+
+        [[nodiscard]] const char* ActionTypeDisplayName(ActionType a_type) { return TR(kActionTypeDisplayKeys[static_cast<int>(a_type)]); }
+
         constexpr int kOutfitModeCount = 2;
+
         constexpr const char* kMovementDirectionNames[] = {"Forward", "Backward", "StrafeLeft", "StrafeRight"};
-        constexpr const char* kMovementDirectionDisplayNames[] = {"Move Forward", "Move Backward", "Strafe Left", "Strafe Right"};
         constexpr int kMovementDirectionCount = 4;
         constexpr const char* kOpenMenuTargetNames[] = {"Inventory", "Spells", "Map", "Skills", "Favorites", "Rest"};
-        constexpr const char* kOpenMenuTargetDisplayNames[] = {"Inventory", "Spells", "Map", "Skills", "Favorites", "Wait/Rest"};
         constexpr int kOpenMenuTargetCount = 6;
 
 
@@ -80,7 +90,7 @@ namespace Hotkeys {
 
         [[nodiscard]] std::string BindKeyLabel(const BindKey& a_key, std::uint32_t a_modifierKeyCode, std::uint32_t a_modifierGamepadCode) {
             std::string label = KeyWithModifierLabel(a_key.idCode, a_key.modifierHeld, a_modifierKeyCode, a_modifierGamepadCode);
-            label += (a_key.press == PressType::kHold) ? " (Hold)" : " (Tap)";
+            label += (a_key.press == PressType::kHold) ? TR("keybinds.press_suffix_hold") : TR("keybinds.press_suffix_tap");
             return label;
         }
 
@@ -115,15 +125,15 @@ namespace Hotkeys {
                     s_captureTarget = CaptureTarget::kNone;
                     return CaptureResult::kCaptured;
                 }
-                Text(input->IsCaptureModifierHeld() ? "Modifier + ..." : "press a key...");
+                Text("%s", input->IsCaptureModifierHeld() ? TR("capture.modifier_plus_ellipsis") : TR("capture.press_a_key"));
                 SameLine();
-                if (Button("Cancel")) {
+                if (Button(TR("common.cancel"))) {
                     input->CancelCapture();
                     s_captureTarget = CaptureTarget::kNone;
                     return CaptureResult::kCancelled;
                 }
             } else {
-                if (Button("Bind")) {
+                if (Button(TR("capture.bind"))) {
                     bool combinesWithModifier = a_target != CaptureTarget::kModifierKey && a_target != CaptureTarget::kGamepadModifier;
                     input->BeginCapture(combinesWithModifier);
                     s_captureTarget = a_target;
@@ -264,6 +274,12 @@ namespace Hotkeys {
             }
         }
 
+        void DescText(const char* a_text) {
+            PushTextWrapPos(0.0f);
+            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "%s", a_text);
+            PopTextWrapPos();
+        }
+
         bool RenderTypeaheadCombo(const char* a_comboLabel, int& a_currentIndex, const char* const* a_items, int a_itemCount,
                                    TypeaheadState& a_typeahead, const char* a_emptyMessage = nullptr, int a_scrollToOnOpen = -1) {
             std::string preview = (a_currentIndex >= 0 && a_currentIndex < a_itemCount) ? a_items[a_currentIndex] : "(none)";
@@ -349,7 +365,7 @@ namespace Hotkeys {
                 }
 
                 if (a_itemCount == 0 && a_emptyMessage) {
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, a_emptyMessage);
+                    DescText(a_emptyMessage);
                 }
 
                 EndCombo();
@@ -375,14 +391,14 @@ namespace Hotkeys {
                     scrollToLastSelectedOnOpen = !s_lastSelectedPlugin.empty();
                 }
 
-                Text("Filter");
+                Text("%s", TR("picker.filter"));
                 SameLine();
                 SetNextItemWidth(140.0f);
                 InputText("##PluginFilter", a_picker.pluginFilter, sizeof(a_picker.pluginFilter));
                 bool filterFocused = IsItemActive();
 
                 SameLine();
-                Text("Sort");
+                Text("%s", TR("picker.sort"));
                 SameLine();
                 SetNextItemWidth(110.0f);
                 RenderTypeaheadCombo("##PluginSort", a_picker.pluginSortMode, kPluginSortNames, kPluginSortCount, a_picker.pluginSortTypeahead);
@@ -488,7 +504,7 @@ namespace Hotkeys {
                 }
 
                 if (shown.empty()) {
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, plugins.empty() ? "No plugins have any forms of this type." : "No plugins match this filter.");
+                    DescText(plugins.empty() ? TR("picker.no_plugins_have_forms") : TR("picker.no_plugins_match_filter"));
                 }
 
                 EndCombo();
@@ -680,7 +696,7 @@ namespace Hotkeys {
         void RenderSortedFormCombo(FieldPicker& a_picker, const std::vector<FormBrowser::FormChoice>& a_choices, const char* a_formLabel,
                                     const char* a_emptyMessage, FormSortKind a_kind = FormSortKind::kGeneric) {
             if (a_choices.empty()) {
-                TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, a_emptyMessage);
+                DescText(a_emptyMessage);
                 return;
             }
 
@@ -713,7 +729,7 @@ namespace Hotkeys {
         void RenderFilterableFormCombo(FieldPicker& a_picker, const std::vector<FormBrowser::FormChoice>& a_choices, const char* a_formLabel,
                                         const char* a_emptyMessage, const char* const* a_sortNames, int a_sortCount, FormSortKind a_kind) {
             if (a_choices.empty()) {
-                TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, a_emptyMessage);
+                DescText(a_emptyMessage);
                 return;
             }
 
@@ -743,14 +759,14 @@ namespace Hotkeys {
                     scrollToLastSelectedOnOpen = (lastSelectedDisplayIndex >= 0);
                 }
 
-                Text("Filter");
+                Text("%s", TR("picker.filter"));
                 SameLine();
                 SetNextItemWidth(140.0f);
                 InputText("##FormFilter", a_picker.formFilter, sizeof(a_picker.formFilter));
                 bool filterFocused = IsItemActive();
 
                 SameLine();
-                Text("Sort");
+                Text("%s", TR("picker.sort"));
                 SameLine();
                 SetNextItemWidth(110.0f);
                 RenderTypeaheadCombo("##FormSort", a_picker.formSortMode, a_sortNames, a_sortCount, a_picker.formSortTypeahead);
@@ -843,7 +859,7 @@ namespace Hotkeys {
                 }
 
                 if (shown.empty()) {
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, sorted.empty() ? a_emptyMessage : "No forms match this filter.");
+                    DescText(sorted.empty() ? a_emptyMessage : TR("picker.no_forms_match_filter"));
                 }
 
                 EndCombo();
@@ -871,7 +887,7 @@ namespace Hotkeys {
 
             if (a_sortKind == FormSortKind::kSpell) {
                 SetNextItemWidth(130.0f);
-                RenderTypeaheadCombo("Spell Sort", a_picker.formSortMode, kSpellSortNames, kSpellSortCount, a_picker.formSortTypeahead);
+                RenderTypeaheadCombo(TR("picker.spell_sort"), a_picker.formSortMode, kSpellSortNames, kSpellSortCount, a_picker.formSortTypeahead);
             }
 
             auto renderForm = [&](const std::vector<FormBrowser::FormChoice>& a_choices, const char* a_empty) {
@@ -888,19 +904,19 @@ namespace Hotkeys {
             };
 
             if (a_flat) {
-                renderForm(a_picker.flatChoices, "Nothing matching in your inventory.");
+                renderForm(a_picker.flatChoices, TR("picker.nothing_matching_inventory"));
             } else {
                 if (a_widthScale != 1.0f) {
                     SetNextItemWidth(CalcItemWidth() * a_widthScale);
                 }
-                RenderPluginCombo("Plugin", a_picker);
+                RenderPluginCombo(TR("picker.plugin"), a_picker);
 
                 if (a_picker.pluginIndex >= 0) {
                     const auto* choices = CurrentChoices(a_picker);
                     if (choices) {
-                        renderForm(*choices, "No matching forms in this plugin.");
+                        renderForm(*choices, TR("picker.no_matching_forms_in_plugin"));
                     } else {
-                        TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "No matching forms in this plugin.");
+                        DescText(TR("picker.no_matching_forms_in_plugin"));
                     }
                 }
             }
@@ -991,6 +1007,9 @@ namespace Hotkeys {
             std::vector<FormRef> unequipItems;
             int movementDirectionIndex = 0;
             int openMenuTargetIndex = 0;
+            bool rechargePreferSmaller = true;
+            int rechargeMaxSize = 5;
+            bool rechargeNotify = false;
         };
         ActionEditState s_actionEditor;
 
@@ -1044,20 +1063,20 @@ namespace Hotkeys {
         void SetProfileCycleKeyWithConfirm(HotkeyManager* a_manager, std::uint32_t a_idCode, bool a_requiresModifier) {
             if (a_idCode != 0 && ProfileCycleKeyCollidesWithBind(a_manager, a_idCode, a_requiresModifier)) {
                 RequestConfirm(
-                    "This key bind already exists in the current profile. Setting it as the Profile-Cycle hotkey will take "
-                    "priority over that key bind whenever this exact combination is pressed. Continue?",
-                    "Continue", [a_manager, a_idCode, a_requiresModifier]() { ApplyProfileCycleKeyChange(a_manager, a_idCode, a_requiresModifier); });
+                    TR("keybinds.profile_cycle_collision_confirm"), TR("common.continue"),
+                    [a_manager, a_idCode, a_requiresModifier]() { ApplyProfileCycleKeyChange(a_manager, a_idCode, a_requiresModifier); });
             } else {
                 ApplyProfileCycleKeyChange(a_manager, a_idCode, a_requiresModifier);
             }
         }
 
         void RenderConfirmModal() {
+            std::string modalId = TRID("confirm_modal.title", "##ConfirmModal");
             if (s_openConfirm) {
-                OpenPopup("Confirm?##ConfirmModal");
+                OpenPopup(modalId.c_str());
                 s_openConfirm = false;
             }
-            if (BeginPopupModal("Confirm?##ConfirmModal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            if (BeginPopupModal(modalId.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
                 TextWrapped("%s", s_pendingConfirm.message.c_str());
                 Spacing();
                 std::string confirmButtonId = s_pendingConfirm.confirmLabel + "##ConfirmModalYes";
@@ -1069,7 +1088,7 @@ namespace Hotkeys {
                     CloseCurrentPopup();
                 }
                 SameLine();
-                if (SmallButton("Cancel##ConfirmModalNo")) {
+                if (SmallButton(TRID("common.cancel", "##ConfirmModalNo").c_str())) {
                     s_pendingConfirm = PendingConfirm{};
                     CloseCurrentPopup();
                 }
@@ -1139,8 +1158,7 @@ namespace Hotkeys {
                 s_keyEditor.requiresModifier = a_requiresModifier;
             };
             if (manager->HasBind(newKey)) {
-                RequestConfirm("Key bind already exists. Proceeding will clear the actions from this key bind. Continue?",
-                               "Continue", applyChange);
+                RequestConfirm(TR("keybinds.rekey_collision_confirm"), TR("common.continue"), applyChange);
             } else {
                 applyChange();
             }
@@ -1333,14 +1351,14 @@ namespace Hotkeys {
 
         void RenderActionTypeCombo(ActionType& a_type, const std::vector<ActionType>& a_allowedTypes) {
             if (a_allowedTypes.empty()) {
-                TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "No action types available - this bind already has one of everything it can.");
+                DescText(TR("actioneditor.no_action_types_available"));
                 return;
             }
 
             std::vector<const char*> labels;
             labels.reserve(a_allowedTypes.size());
             for (auto type : a_allowedTypes) {
-                labels.push_back(kActionTypeDisplayNames[static_cast<int>(type)]);
+                labels.push_back(ActionTypeDisplayName(type));
             }
 
             int currentIndex = -1;
@@ -1357,7 +1375,7 @@ namespace Hotkeys {
 
             static TypeaheadState typeahead;
 
-            Text("Action Type");
+            Text("%s", TR("actioneditor.action_type"));
             SameLine();
             SetNextItemWidth(180.0f);
             if (RenderTypeaheadCombo("##ActionType", currentIndex, labels.data(), static_cast<int>(labels.size()), typeahead)) {
@@ -1482,6 +1500,21 @@ namespace Hotkeys {
                 case ActionType::kQuickLoad:
                 case ActionType::kToggleMenus:
                     break;
+                case ActionType::kRechargeWeapon:
+                case ActionType::kRechargeWeaponLeftHand:
+                    if (auto it = fields.find("PreferSmaller"); it != fields.end()) {
+                        s_actionEditor.rechargePreferSmaller = (it->second == "1");
+                    }
+                    if (auto it = fields.find("MaxSize"); it != fields.end()) {
+                        auto parsed = std::atoi(it->second.c_str());
+                        if (parsed >= 0 && parsed <= 5) {
+                            s_actionEditor.rechargeMaxSize = parsed;
+                        }
+                    }
+                    if (auto it = fields.find("Notify"); it != fields.end()) {
+                        s_actionEditor.rechargeNotify = (it->second == "1");
+                    }
+                    break;
                 case ActionType::kMovement:
                     if (auto it = fields.find("Direction"); it != fields.end()) {
                         for (int i = 0; i < kMovementDirectionCount; ++i) {
@@ -1549,11 +1582,11 @@ namespace Hotkeys {
             const auto& settings = HotkeyManager::GetSingleton()->GetSettings();
 
             Separator();
-            TextColored(ImVec4{0.9f, 0.9f, 0.3f, 1.0f}, "Editing Bind");
+            TextColored(ImVec4{0.9f, 0.9f, 0.3f, 1.0f}, "%s", TR("keybinds.editing_bind"));
 
             if (!s_keyEditor.isNewKey && !s_keyEditor.isRemapping) {
                 SameLine();
-                if (SmallButton("Remap")) {
+                if (SmallButton(TR("keybinds.remap"))) {
                     s_keyEditor.isRemapping = true;
                     InputHandler::GetSingleton()->BeginCapture();
                     s_captureTarget = CaptureTarget::kBindKey;
@@ -1562,12 +1595,12 @@ namespace Hotkeys {
 
             if (s_keyEditor.isNewKey || s_keyEditor.isRemapping) {
                 if (s_keyEditor.pendingCode) {
-                    Text("Key: %s",
+                    Text(TR("keybinds.key_label"),
                          KeyWithModifierLabel(*s_keyEditor.pendingCode, s_keyEditor.requiresModifier, settings.modifierKeyCode,
                                                settings.modifierGamepadCode)
                              .c_str());
                     SameLine();
-                    if (SmallButton("Ok")) {
+                    if (SmallButton(TR("common.ok"))) {
                         BindKey newKey{*s_keyEditor.pendingCode, s_keyEditor.requiresModifier,
                                        s_keyEditor.pressIndex == 1 ? PressType::kHold : PressType::kTap};
                         auto* manager = HotkeyManager::GetSingleton();
@@ -1588,15 +1621,14 @@ namespace Hotkeys {
 
                         bool wouldOverwriteOther = manager->HasBind(newKey) && (isNewKey || !oldKey || *oldKey != newKey);
                         if (wouldOverwriteOther) {
-                            RequestConfirm("Key bind already exists. Proceeding will clear the actions from this key bind. Continue?",
-                                           "Continue", applyAndClose);
+                            RequestConfirm(TR("keybinds.key_collision_confirm"), TR("common.continue"), applyAndClose);
                         } else {
                             applyAndClose();
                         }
                         return;
                     }
                     SameLine();
-                    if (SmallButton("Cancel")) {
+                    if (SmallButton(TR("common.cancel"))) {
                         s_keyEditor.pendingCode.reset();
                         if (s_keyEditor.isNewKey) {
                             CloseEditors();
@@ -1605,7 +1637,7 @@ namespace Hotkeys {
                         s_keyEditor.isRemapping = false;
                     }
                 } else {
-                    Text("Key:");
+                    Text("%s", TR("keybinds.key_capture_label"));
                     SameLine();
                     PushID("BindKeyCapture");
                     std::uint32_t captured = 0;
@@ -1624,20 +1656,21 @@ namespace Hotkeys {
                     }
                 }
             } else {
-                Text("Key: %s", s_keyEditor.key
+                Text(TR("keybinds.key_label"), s_keyEditor.key
                                      ? KeyWithModifierLabel(s_keyEditor.key->idCode, s_keyEditor.requiresModifier, settings.modifierKeyCode,
                                                              settings.modifierGamepadCode)
                                            .c_str()
-                                     : "(none)");
+                                     : TR("keybinds.key_label_none"));
             }
 
             static TypeaheadState pressTypeahead;
             SetNextItemWidth(90.0f);
             int pendingPressIndex = s_keyEditor.pressIndex;
-            bool pressChanged = RenderTypeaheadCombo("Press", pendingPressIndex, kPressNames, 2, pressTypeahead);
+            const char* pressNames[] = {TR("keybinds.press_tap"), TR("keybinds.press_hold")};
+            bool pressChanged = RenderTypeaheadCombo(TR("keybinds.press"), pendingPressIndex, pressNames, 2, pressTypeahead);
             SameLine();
             bool pendingRequiresModifier = s_keyEditor.requiresModifier;
-            bool modifierChanged = Checkbox("Requires modifier", &pendingRequiresModifier);
+            bool modifierChanged = Checkbox(TR("keybinds.requires_modifier"), &pendingRequiresModifier);
             if (pressChanged || modifierChanged) {
                 ApplyKeyChangeLiveWithConfirm(pendingPressIndex, pendingRequiresModifier);
             }
@@ -1646,8 +1679,8 @@ namespace Hotkeys {
 
         void RenderActionEditor() {
             Separator();
-            TextColored(ImVec4{0.9f, 0.9f, 0.3f, 1.0f}, "Editing Action");
-            Text("Key: %s", BindKeyLabel(s_actionEditor.targetKey, HotkeyManager::GetSingleton()->GetSettings().modifierKeyCode, HotkeyManager::GetSingleton()->GetSettings().modifierGamepadCode).c_str());
+            TextColored(ImVec4{0.9f, 0.9f, 0.3f, 1.0f}, "%s", TR("actioneditor.editing_action"));
+            Text(TR("keybinds.key_label"), BindKeyLabel(s_actionEditor.targetKey, HotkeyManager::GetSingleton()->GetSettings().modifierKeyCode, HotkeyManager::GetSingleton()->GetSettings().modifierGamepadCode).c_str());
 
             if (s_actionEditor.actionType != ActionType::kPanic && s_actionEditor.actionType != ActionType::kTogglePOV &&
                 s_actionEditor.actionType != ActionType::kMovement && s_actionEditor.actionType != ActionType::kOpenMenu &&
@@ -1657,8 +1690,9 @@ namespace Hotkeys {
                 s_actionEditor.actionType != ActionType::kToggleFreeCamPaused &&
                 s_actionEditor.actionType != ActionType::kToggleSprint &&
                 s_actionEditor.actionType != ActionType::kQuickSave && s_actionEditor.actionType != ActionType::kQuickLoad &&
-                s_actionEditor.actionType != ActionType::kToggleMenus) {
-                if (Checkbox("From Plugins", &s_actionEditor.fromPlugins)) {
+                s_actionEditor.actionType != ActionType::kToggleMenus && s_actionEditor.actionType != ActionType::kRechargeWeapon &&
+                s_actionEditor.actionType != ActionType::kRechargeWeaponLeftHand) {
+                if (Checkbox(TR("actioneditor.from_plugins"), &s_actionEditor.fromPlugins)) {
                     ResetActionPickers(s_actionEditor);
                 }
             }
@@ -1671,9 +1705,10 @@ namespace Hotkeys {
                 s_actionEditor.actionType != ActionType::kToggleFreeCamPaused &&
                 s_actionEditor.actionType != ActionType::kToggleSprint &&
                 s_actionEditor.actionType != ActionType::kQuickSave && s_actionEditor.actionType != ActionType::kQuickLoad &&
-                s_actionEditor.actionType != ActionType::kToggleMenus) {
+                s_actionEditor.actionType != ActionType::kToggleMenus && s_actionEditor.actionType != ActionType::kRechargeWeapon &&
+                s_actionEditor.actionType != ActionType::kRechargeWeaponLeftHand) {
                 SameLine();
-                Checkbox("Add if missing", &s_actionEditor.addIfMissing);
+                Checkbox(TR("actioneditor.add_if_missing"), &s_actionEditor.addIfMissing);
             }
 
             std::vector<ActionType> existingTypes;
@@ -1702,27 +1737,27 @@ namespace Hotkeys {
             if (selectedType == ActionType::kWeaponSet) {
                 SameLine();
                 BeginDisabled(disableLeftHand);
-                if (Checkbox("Use Shield", &s_actionEditor.useShield)) {
+                if (Checkbox(TR("actioneditor.use_shield"), &s_actionEditor.useShield)) {
                     s_actionEditor.weaponLeft = FieldPicker{};
                 }
                 EndDisabled();
                 SameLine();
-                if (SmallButton("Add Equipped Weapons")) {
+                if (SmallButton(TR("actioneditor.add_equipped_weapons"))) {
                     AddEquippedWeapons(s_actionEditor);
                 }
             } else if (selectedType == ActionType::kSpell) {
                 SameLine();
-                if (SmallButton("Add Equipped Spells")) {
+                if (SmallButton(TR("actioneditor.add_equipped_spells"))) {
                     AddEquippedSpells(s_actionEditor);
                 }
             } else if (selectedType == ActionType::kShout) {
                 SameLine();
-                if (SmallButton("Add Equipped Shouts")) {
+                if (SmallButton(TR("actioneditor.add_equipped_shouts"))) {
                     AddEquippedShouts(s_actionEditor);
                 }
             } else if (selectedType == ActionType::kOutfit) {
                 SameLine();
-                Checkbox("Unequip everything else", &s_actionEditor.outfitUnequipEverythingElse);
+                Checkbox(TR("actioneditor.outfit_unequip_everything_else"), &s_actionEditor.outfitUnequipEverythingElse);
             }
 
             Separator();
@@ -1731,62 +1766,63 @@ namespace Hotkeys {
 
             switch (selectedType) {
                 case ActionType::kWeaponSet: {
-                    Text("Right Hand (optional)");
+                    Text("%s", TR("actioneditor.right_hand_optional"));
                     RenderFieldPicker("WeaponRight", s_actionEditor.weaponRight, WeaponCatalogFor(s_actionEditor.fromPlugins),
-                                      kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kWeapon, 0.75f);
+                                      ActionTypeDisplayName(selectedType), flat, FormSortKind::kWeapon, 0.75f);
 
-                    Text("Left Hand (optional)");
+                    Text("%s", TR("actioneditor.left_hand_optional"));
                     if (disableLeftHand) {
-                        TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "(disabled - Right Hand is two-handed)");
+                        DescText(TR("actioneditor.weaponset.left_disabled_two_handed"));
                     }
                     BeginDisabled(disableLeftHand);
                     RenderFieldPicker(
                         "WeaponLeft", s_actionEditor.weaponLeft, LeftHandCatalogFor(s_actionEditor.fromPlugins, s_actionEditor.useShield),
-                        s_actionEditor.useShield ? "Shield" : kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kWeapon,
+                        s_actionEditor.useShield ? "Shield" : ActionTypeDisplayName(selectedType), flat, FormSortKind::kWeapon,
                         0.75f);
                     EndDisabled();
 
-                    Text("Ammo (optional)");
+                    Text("%s", TR("actioneditor.ammo_optional"));
                     RenderFieldPicker("WeaponAmmo", s_actionEditor.weaponAmmo, AmmoCatalogFor(s_actionEditor.fromPlugins),
-                                      kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kGeneric, 0.75f);
+                                      ActionTypeDisplayName(selectedType), flat, FormSortKind::kGeneric, 0.75f);
                     break;
                 }
                 case ActionType::kOutfit: {
                     static TypeaheadState outfitSourceTypeahead;
                     if (s_actionEditor.fromPlugins) {
                         SetNextItemWidth(CalcItemWidth() * 0.75f);
-                        RenderTypeaheadCombo("Source", s_actionEditor.outfitModeIndex, kOutfitModeNames, kOutfitModeCount, outfitSourceTypeahead);
+                        const char* outfitModeNames[] = {TR("actioneditor.outfit.mode_individual_items"), TR("actioneditor.outfit.mode_outfit_record")};
+                        RenderTypeaheadCombo(TR("actioneditor.outfit.source"), s_actionEditor.outfitModeIndex, outfitModeNames, kOutfitModeCount, outfitSourceTypeahead);
                     } else {
                         s_actionEditor.outfitModeIndex = 0;
                     }
                     if (s_actionEditor.fromPlugins && s_actionEditor.outfitModeIndex == 1) {
-                        Text("Outfit Record");
+                        Text("%s", TR("actioneditor.outfit.outfit_record"));
                         RenderFieldPicker("OutfitForm", s_actionEditor.outfitFormPicker, FormBrowser::GetOutfitCatalog,
-                                          kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kGeneric, 0.75f);
-                        TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Equips everything the outfit record contains.");
+                                          ActionTypeDisplayName(selectedType), flat, FormSortKind::kGeneric, 0.75f);
+                        DescText(TR("actioneditor.outfit.record_tooltip"));
                     } else {
-                        Text("Armor Item");
+                        Text("%s", TR("actioneditor.outfit.armor_item"));
                         RenderFieldPicker("OutfitItem", s_actionEditor.outfitPicker, ArmorCatalogFor(s_actionEditor.fromPlugins),
-                                          "Armor/Clothing", flat, FormSortKind::kArmor, 0.75f);
-                        if (Button("Add Item")) {
+                                          TR("actioneditor.outfit.armor_clothing"), flat, FormSortKind::kArmor, 0.75f);
+                        if (Button(TR("actioneditor.outfit.add_item"))) {
                             if (auto ref = PickedFormRef(s_actionEditor.outfitPicker)) {
                                 s_actionEditor.outfitItems.push_back(*ref);
                             }
                         }
                         SameLine();
-                        if (Button("Add Worn Items")) {
+                        if (Button(TR("actioneditor.outfit.add_worn_items"))) {
                             AddWornArmorItems(s_actionEditor.outfitItems);
                         }
-                        Text("Outfit name:");
+                        Text("%s", TR("actioneditor.outfit.name_label"));
                         SameLine();
                         SetNextItemWidth(CalcItemWidth() * 0.33f);
                         InputText("##OutfitName", s_actionEditor.outfitName, sizeof(s_actionEditor.outfitName));
-                        Text("Items in this outfit:");
+                        Text("%s", TR("actioneditor.outfit.items_in_outfit"));
                         for (std::size_t i = 0; i < s_actionEditor.outfitItems.size();) {
                             PushID(static_cast<int>(i));
                             Text("  %s", s_actionEditor.outfitItems[i].ToDisplayString().c_str());
                             SameLine();
-                            if (SmallButton("Remove")) {
+                            if (SmallButton(TR("common.remove"))) {
                                 s_actionEditor.outfitItems.erase(s_actionEditor.outfitItems.begin() + static_cast<std::ptrdiff_t>(i));
                                 PopID();
                                 continue;  // don't advance i - the next item shifted into this slot
@@ -1798,116 +1834,137 @@ namespace Hotkeys {
                     break;
                 }
                 case ActionType::kSpell:
-                    Text("Right Hand (optional)");
+                    Text("%s", TR("actioneditor.right_hand_optional"));
                     RenderFieldPicker("SpellRight", s_actionEditor.spellRight, SpellCatalogFor(s_actionEditor.fromPlugins),
-                                      kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kSpell, 0.75f);
-                    Text("Left Hand (optional)");
+                                      ActionTypeDisplayName(selectedType), flat, FormSortKind::kSpell, 0.75f);
+                    Text("%s", TR("actioneditor.left_hand_optional"));
                     RenderFieldPicker("SpellLeft", s_actionEditor.spellLeft, SpellCatalogFor(s_actionEditor.fromPlugins),
-                                      kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kSpell, 0.75f);
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Pick the same spell for both hands to dual-cast it.");
+                                      ActionTypeDisplayName(selectedType), flat, FormSortKind::kSpell, 0.75f);
+                    DescText(TR("actioneditor.spell.dual_cast_tooltip"));
                     break;
                 case ActionType::kShout:
-                    Text("Shout");
+                    Text("%s", TR("actioneditor.shout.label"));
                     RenderFieldPicker("ShoutForm", s_actionEditor.shoutPicker, ShoutCatalogFor(s_actionEditor.fromPlugins),
-                                      kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kGeneric, 0.75f);
+                                      ActionTypeDisplayName(selectedType), flat, FormSortKind::kGeneric, 0.75f);
                     break;
                 case ActionType::kConsumable:
-                    Text("Item");
+                    Text("%s", TR("actioneditor.consumable.label"));
                     RenderFieldPicker("ConsumableForm", s_actionEditor.consumablePicker, ConsumableCatalogFor(s_actionEditor.fromPlugins),
-                                      kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kGeneric, 0.75f);
+                                      ActionTypeDisplayName(selectedType), flat, FormSortKind::kGeneric, 0.75f);
                     break;
                 case ActionType::kAmmoSwap:
-                    Text("Ammo");
+                    Text("%s", TR("actioneditor.ammoswap.label"));
                     RenderFieldPicker("AmmoForm", s_actionEditor.ammoPicker, AmmoCatalogFor(s_actionEditor.fromPlugins),
-                                      kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kGeneric, 0.75f);
+                                      ActionTypeDisplayName(selectedType), flat, FormSortKind::kGeneric, 0.75f);
                     break;
                 case ActionType::kToggleTorch:
-                    Text("Torch");
+                    Text("%s", TR("actioneditor.toggletorch.label"));
                     RenderFieldPicker("TorchForm", s_actionEditor.torchPicker, TorchCatalogFor(s_actionEditor.fromPlugins),
-                                      kActionTypeDisplayNames[static_cast<int>(selectedType)], flat, FormSortKind::kGeneric, 0.75f);
+                                      ActionTypeDisplayName(selectedType), flat, FormSortKind::kGeneric, 0.75f);
                     break;
                 case ActionType::kTogglePOV:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Switches between 1st and 3rd person view.");
+                    DescText(TR("actioneditor.togglepov.desc"));
                     break;
                 case ActionType::kReadySheath:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Draws or sheathes your weapon/magic, whichever you aren't currently doing.");
+                    DescText(TR("actioneditor.readysheath.desc"));
                     break;
                 case ActionType::kToggleSneak:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Toggles sneaking, the same as tapping your Sneak key.");
+                    DescText(TR("actioneditor.togglesneak.desc"));
                     break;
                 case ActionType::kToggleAutoMove:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Toggles auto-move, the same as tapping your Auto-Move key.");
+                    DescText(TR("actioneditor.toggleautomove.desc"));
                     break;
                 case ActionType::kJump:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Makes you jump, the same as tapping your Jump key. Doesn't toggle.");
+                    DescText(TR("actioneditor.jump.desc"));
                     break;
                 case ActionType::kToggleFreeCam:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Toggles free-flying camera, the same as the \"tfc\" console command.");
+                    DescText(TR("actioneditor.togglefreecam.desc"));
                     break;
                 case ActionType::kToggleFreeCamPaused:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                                "Toggles free-flying camera and freezes time, the same as the \"tfc 1\" console command.");
+                    DescText(TR("actioneditor.togglefreecampaused.desc"));
                     break;
                 case ActionType::kToggleSprint:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                                "Toggles sprinting on/off persistently instead of requiring it held - handy for gamepads.");
+                    DescText(TR("actioneditor.togglesprint.desc"));
                     break;
                 case ActionType::kQuickSave:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Quick-saves, the same as tapping your Quicksave key. Doesn't toggle.");
+                    DescText(TR("actioneditor.quicksave.desc"));
                     break;
                 case ActionType::kQuickLoad:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Quick-loads, the same as tapping your Quickload key. Doesn't toggle.");
+                    DescText(TR("actioneditor.quickload.desc"));
                     break;
                 case ActionType::kToggleMenus:
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                                "Toggles HUD/menu visibility, the same as the \"tm\" console command. Doesn't close any open menu.");
+                    DescText(TR("actioneditor.togglemenus.desc"));
                     break;
+                case ActionType::kRechargeWeapon:
+                case ActionType::kRechargeWeaponLeftHand: {
+                    bool isLeftHand = s_actionEditor.actionType == ActionType::kRechargeWeaponLeftHand;
+                    DescText(isLeftHand ? TR("actioneditor.recharge.desc_left") : TR("actioneditor.recharge.desc_right"));
+                    Checkbox(TR("actioneditor.recharge.prefer_smaller"), &s_actionEditor.rechargePreferSmaller);
+                    DescText(TR("actioneditor.recharge.prefer_smaller_tooltip"));
+                    {
+                        const char* soulGemSizeNames[] = {TR("actioneditor.recharge.soul_petty"), TR("actioneditor.recharge.soul_lesser"),
+                                                           TR("actioneditor.recharge.soul_common"), TR("actioneditor.recharge.soul_greater"),
+                                                           TR("actioneditor.recharge.soul_grand")};
+                        Text("%s", TR("actioneditor.recharge.never_use_above"));
+                        for (int i = 1; i <= 5; ++i) {
+                            SameLine();
+                            PushID(i);
+                            RadioButton(soulGemSizeNames[i - 1], &s_actionEditor.rechargeMaxSize, i);
+                            PopID();
+                        }
+                    }
+                    DescText(TR("actioneditor.recharge.contained_soul_tooltip"));
+
+                    Checkbox(TR("actioneditor.recharge.notify"), &s_actionEditor.rechargeNotify);
+                    break;
+                }
                 case ActionType::kMovement: {
                     static TypeaheadState movementDirectionTypeahead;
-                    Text("Direction");
+                    Text("%s", TR("actioneditor.movement.direction"));
                     SameLine();
                     SetNextItemWidth(180.0f);
-                    RenderTypeaheadCombo("##MovementDirection", s_actionEditor.movementDirectionIndex, kMovementDirectionDisplayNames,
+                    const char* movementDirectionNames[] = {TR("actioneditor.movement.forward"), TR("actioneditor.movement.backward"),
+                                                             TR("actioneditor.movement.strafe_left"), TR("actioneditor.movement.strafe_right")};
+                    RenderTypeaheadCombo("##MovementDirection", s_actionEditor.movementDirectionIndex, movementDirectionNames,
                                           kMovementDirectionCount, movementDirectionTypeahead);
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                                "Moves in this direction for as long as the key is held - remaps that key's own movement rather than "
-                                "adding to it, and ignores the Press setting above (Tap/Hold doesn't apply to Movement).");
+                    DescText(TR("actioneditor.movement.tooltip"));
                     break;
                 }
                 case ActionType::kOpenMenu: {
+                    const char* openMenuTargetNames[] = {TR("actioneditor.openmenu.inventory"), TR("actioneditor.openmenu.spells"),
+                                                          TR("actioneditor.openmenu.map"),       TR("actioneditor.openmenu.skills"),
+                                                          TR("actioneditor.openmenu.favorites"),  TR("actioneditor.openmenu.wait_rest")};
                     for (int i = 0; i < kOpenMenuTargetCount; ++i) {
-                        RadioButton(kOpenMenuTargetDisplayNames[i], &s_actionEditor.openMenuTargetIndex, i);
+                        RadioButton(openMenuTargetNames[i], &s_actionEditor.openMenuTargetIndex, i);
                     }
-                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                                "Opens the selected menu, the same as Skyrim's own hotkey for it - pressing a different Open Menu bind "
-                                "while one of these is already open switches directly to it.");
+                    DescText(TR("actioneditor.openmenu.tooltip"));
                     break;
                 }
                 case ActionType::kPanic: {
                     bool hasSpecificItems = !s_actionEditor.unequipItems.empty();
                     BeginDisabled(hasSpecificItems);
-                    Checkbox("Unequip Weapons", &s_actionEditor.panicWeapons);
-                    Checkbox("Unequip Spells", &s_actionEditor.panicSpells);
-                    Checkbox("Unequip Armor", &s_actionEditor.panicArmor);
-                    Checkbox("Unequip Shouts", &s_actionEditor.panicShouts);
-                    Checkbox("Unequip Ammo", &s_actionEditor.panicAmmo);
+                    Checkbox(TR("actioneditor.panic.unequip_weapons"), &s_actionEditor.panicWeapons);
+                    Checkbox(TR("actioneditor.panic.unequip_spells"), &s_actionEditor.panicSpells);
+                    Checkbox(TR("actioneditor.panic.unequip_armor"), &s_actionEditor.panicArmor);
+                    Checkbox(TR("actioneditor.panic.unequip_shouts"), &s_actionEditor.panicShouts);
+                    Checkbox(TR("actioneditor.panic.unequip_ammo"), &s_actionEditor.panicAmmo);
                     EndDisabled();
                     if (hasSpecificItems) {
-                        TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "(disabled - specific items below take priority, to avoid unequip order conflicts)");
+                        DescText(TR("actioneditor.panic.disabled_tooltip"));
                     }
 
                     Separator();
                     EnsureCatalog(s_actionEditor.unequipWornPicker, FormBrowser::GetWornArmorCatalog);
                     s_actionEditor.unequipWornPicker.flatMode = true;
                     PushID("UnequipWornForm");
-                    Text("Unequip Worn Item");
+                    Text("%s", TR("actioneditor.panic.unequip_worn_item"));
                     SameLine();
                     SetNextItemWidth(CalcItemWidth() * 0.5f);
                     RenderSortedFormCombo(s_actionEditor.unequipWornPicker, s_actionEditor.unequipWornPicker.flatChoices, "##UnequipWornForm",
-                                          "Nothing matching in your inventory.");
+                                          TR("picker.nothing_matching_inventory"));
                     PopID();
                     SameLine();
-                    if (Button("Add")) {
+                    if (Button(TR("common.add"))) {
                         if (auto ref = PickedFormRef(s_actionEditor.unequipWornPicker)) {
                             bool alreadyPresent = std::any_of(
                                 s_actionEditor.unequipItems.begin(), s_actionEditor.unequipItems.end(), [&](const FormRef& a_existing) {
@@ -1918,12 +1975,12 @@ namespace Hotkeys {
                             }
                         }
                     }
-                    Text("Items to unequip (in order):");
+                    Text("%s", TR("actioneditor.panic.items_to_unequip"));
                     for (std::size_t i = 0; i < s_actionEditor.unequipItems.size();) {
                         PushID(static_cast<int>(i));
                         Text("  %s", s_actionEditor.unequipItems[i].ToString().c_str());
                         SameLine();
-                        if (SmallButton("Remove")) {
+                        if (SmallButton(TR("common.remove"))) {
                             s_actionEditor.unequipItems.erase(s_actionEditor.unequipItems.begin() + static_cast<std::ptrdiff_t>(i));
                             PopID();
                             continue;  // don't advance i - the next item shifted into this slot
@@ -1941,7 +1998,7 @@ namespace Hotkeys {
 
             Separator();
 
-            if (Button("Save Bind")) {
+            if (Button(TR("common.save_bind"))) {
                 std::unordered_map<std::string, std::string> fields;
                 fields["Type"] = kActionTypeNames[static_cast<int>(selectedType)];
                 bool valid = true;
@@ -1954,7 +2011,7 @@ namespace Hotkeys {
                             left = PickedFormRef(s_actionEditor.weaponLeft);
                         }
                         if (!right && !left) {
-                            s_actionEditor.errorMessage = "Pick a right-hand or left-hand item first.";
+                            s_actionEditor.errorMessage = TR("actioneditor.error.pick_right_or_left");
                             valid = false;
                             break;
                         }
@@ -1976,14 +2033,14 @@ namespace Hotkeys {
                         if (s_actionEditor.outfitModeIndex == 1) {
                             auto outfit = PickedFormRef(s_actionEditor.outfitFormPicker);
                             if (!outfit) {
-                                s_actionEditor.errorMessage = "Pick an outfit record first.";
+                                s_actionEditor.errorMessage = TR("actioneditor.error.pick_outfit_record");
                                 valid = false;
                                 break;
                             }
                             fields["Outfit"] = outfit->ToString();
                         } else {
                             if (s_actionEditor.outfitItems.empty()) {
-                                s_actionEditor.errorMessage = "Add at least one armor item.";
+                                s_actionEditor.errorMessage = TR("actioneditor.error.add_armor_item");
                                 valid = false;
                                 break;
                             }
@@ -2005,7 +2062,7 @@ namespace Hotkeys {
                         auto right = PickedFormRef(s_actionEditor.spellRight);
                         auto left = PickedFormRef(s_actionEditor.spellLeft);
                         if (!right && !left) {
-                            s_actionEditor.errorMessage = "Pick a spell for at least one hand.";
+                            s_actionEditor.errorMessage = TR("actioneditor.error.pick_spell");
                             valid = false;
                             break;
                         }
@@ -2023,7 +2080,7 @@ namespace Hotkeys {
                     case ActionType::kShout: {
                         auto shout = PickedFormRef(s_actionEditor.shoutPicker);
                         if (!shout) {
-                            s_actionEditor.errorMessage = "Pick a shout first.";
+                            s_actionEditor.errorMessage = TR("actioneditor.error.pick_shout");
                             valid = false;
                             break;
                         }
@@ -2036,7 +2093,7 @@ namespace Hotkeys {
                     case ActionType::kConsumable: {
                         auto item = PickedFormRef(s_actionEditor.consumablePicker);
                         if (!item) {
-                            s_actionEditor.errorMessage = "Pick an item first.";
+                            s_actionEditor.errorMessage = TR("actioneditor.error.pick_item");
                             valid = false;
                             break;
                         }
@@ -2049,7 +2106,7 @@ namespace Hotkeys {
                     case ActionType::kAmmoSwap: {
                         auto ammo = PickedFormRef(s_actionEditor.ammoPicker);
                         if (!ammo) {
-                            s_actionEditor.errorMessage = "Pick an ammo type first.";
+                            s_actionEditor.errorMessage = TR("actioneditor.error.pick_ammo");
                             valid = false;
                             break;
                         }
@@ -2062,7 +2119,7 @@ namespace Hotkeys {
                     case ActionType::kToggleTorch: {
                         auto torch = PickedFormRef(s_actionEditor.torchPicker);
                         if (!torch) {
-                            s_actionEditor.errorMessage = "Pick a torch first.";
+                            s_actionEditor.errorMessage = TR("actioneditor.error.pick_torch");
                             valid = false;
                             break;
                         }
@@ -2084,6 +2141,12 @@ namespace Hotkeys {
                     case ActionType::kQuickSave:
                     case ActionType::kQuickLoad:
                     case ActionType::kToggleMenus:
+                        break;
+                    case ActionType::kRechargeWeapon:
+                    case ActionType::kRechargeWeaponLeftHand:
+                        fields["PreferSmaller"] = s_actionEditor.rechargePreferSmaller ? "1" : "0";
+                        fields["MaxSize"] = std::to_string(s_actionEditor.rechargeMaxSize);
+                        fields["Notify"] = s_actionEditor.rechargeNotify ? "1" : "0";
                         break;
                     case ActionType::kMovement:
                         fields["Direction"] = kMovementDirectionNames[s_actionEditor.movementDirectionIndex];
@@ -2113,7 +2176,7 @@ namespace Hotkeys {
                 if (valid) {
                     auto action = DeserializeAction(fields);
                     if (!action) {
-                        s_actionEditor.errorMessage = "Couldn't build that action - double check your selections.";
+                        s_actionEditor.errorMessage = TR("actioneditor.error.couldnt_build_action");
                     } else {
                         auto* manager = HotkeyManager::GetSingleton();
                         if (s_actionEditor.editingExisting && s_actionEditor.editingOriginalType && *s_actionEditor.editingOriginalType != selectedType) {
@@ -2127,7 +2190,7 @@ namespace Hotkeys {
                 }
             }
             SameLine();
-            if (Button("Cancel Edit")) {
+            if (Button(TR("common.cancel_edit"))) {
                 CloseEditors();
             }
         }
@@ -2138,60 +2201,78 @@ namespace Hotkeys {
             bool settingsDirty = false;
 
             bool enabled = settings.enabled;
-            if (ImGuiMCPComponents::ToggleButton("Enabled##GlobalEnable", &enabled)) {
+            if (ImGuiMCPComponents::ToggleButton(TRID("settings.enabled.label", "##GlobalEnable").c_str(), &enabled)) {
                 settings.enabled = enabled;
                 settingsDirty = true;
             }
-            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Master switch. Turn off to completely disable the mod.");
+            DescText(TR("settings.enabled.tooltip"));
 
             Separator();
 
-            if (Checkbox("Toggle unequip (press bind again to unequip)", &settings.toggleUnequip)) {
+            if (Checkbox(TR("settings.toggle_unequip"), &settings.toggleUnequip)) {
                 settingsDirty = true;
             }
-            if (Checkbox("Notify on activation", &settings.notifyOnTrigger)) {
+            if (Checkbox(TR("settings.notify_on_trigger"), &settings.notifyOnTrigger)) {
                 settingsDirty = true;
             }
-            if (Checkbox("Auto Scroll to bottom", &settings.autoScrollToBottom)) {
+            if (Checkbox(TR("settings.auto_scroll_to_bottom"), &settings.autoScrollToBottom)) {
                 settingsDirty = true;
             }
-            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Scrolls the Editing Bind/Action panel into view the moment it opens.");
-            if (Checkbox("Confirm saves and deletes", &settings.confirmSavesAndDeletes)) {
+            DescText(TR("settings.auto_scroll_to_bottom.tooltip"));
+            if (Checkbox(TR("settings.confirm_saves_and_deletes"), &settings.confirmSavesAndDeletes)) {
                 settingsDirty = true;
             }
-            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Shows a confirmation dialog before deleting a bind/action or overwriting a saved profile.");
-            if (Checkbox("Automatically save profile changes", &settings.autoSaveProfileChanges)) {
+            DescText(TR("settings.confirm_saves_and_deletes.tooltip"));
+            if (Checkbox(TR("settings.auto_save_profile_changes"), &settings.autoSaveProfileChanges)) {
                 settingsDirty = true;
             }
-            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                        "Off leaves bind/action changes in memory only, until you click Save on the Profiles tab.");
+            DescText(TR("settings.auto_save_profile_changes.tooltip"));
 
-            if (Checkbox("Allow hotkeys to function in game menus", &settings.allowHotkeysInGameMenus)) {
+            if (Checkbox(TR("settings.allow_hotkeys_in_game_menus"), &settings.allowHotkeysInGameMenus)) {
                 settingsDirty = true;
             }
-            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                        "Only affects Favorites, Container, Barter, Journal, and Book menus - other menus always block "
-                        "hotkeys.");
+            DescText(TR("settings.allow_hotkeys_in_game_menus.tooltip"));
 
-            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Block hotkeys while these menus are open:");
-            if (Checkbox("Inventory##BlockMenu", &settings.blockHotkeysInInventoryMenu)) {
+            DescText(TR("settings.block_menus.header"));
+            if (Checkbox(TRID("settings.block_menus.inventory", "##BlockMenu").c_str(), &settings.blockHotkeysInInventoryMenu)) {
                 settingsDirty = true;
             }
             SameLine();
-            if (Checkbox("Spells##BlockMenu", &settings.blockHotkeysInMagicMenu)) {
+            if (Checkbox(TRID("settings.block_menus.spells", "##BlockMenu").c_str(), &settings.blockHotkeysInMagicMenu)) {
                 settingsDirty = true;
             }
             SameLine();
-            if (Checkbox("Map##BlockMenu", &settings.blockHotkeysInMapMenu)) {
+            if (Checkbox(TRID("settings.block_menus.map", "##BlockMenu").c_str(), &settings.blockHotkeysInMapMenu)) {
                 settingsDirty = true;
             }
             SameLine();
-            if (Checkbox("Skills##BlockMenu", &settings.blockHotkeysInStatsMenu)) {
+            if (Checkbox(TRID("settings.block_menus.skills", "##BlockMenu").c_str(), &settings.blockHotkeysInStatsMenu)) {
                 settingsDirty = true;
             }
-            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                        "Also only matters with something like Skyrim Souls - lets an Open Menu bind switch to/from "
-                        "whichever of these you leave unchecked while a different one is already open.");
+            DescText(TR("settings.block_menus.tooltip"));
+
+
+            SeparatorText(TR("settings.modifier_key.header"));
+            if (Checkbox(TR("settings.modifier_blocks_vanilla_hotkey"), &settings.modifierBlocksVanillaHotkey)) {
+                settingsDirty = true;
+            }
+            DescText(TR("settings.modifier_blocks_vanilla_hotkey.tooltip"));
+
+            auto* locale = Locale::GetSingleton();
+            SeparatorText(TR("settings.language.label"));
+            if (BeginCombo("##Language", locale->GetCurrentLanguage().c_str())) {
+                for (const auto& language : locale->ListLanguages()) {
+                    bool isCurrent = language == locale->GetCurrentLanguage();
+                    if (Selectable(language.c_str(), isCurrent) && !isCurrent) {
+                        if (locale->SetLanguage(language)) {
+                            settings.language = language;
+                            settingsDirty = true;
+                        }
+                    }
+                }
+                EndCombo();
+            }
+            DescText(TR("settings.language.tooltip"));
 
             if (settingsDirty) {
                 manager->SetSettings(settings);
@@ -2204,7 +2285,7 @@ namespace Hotkeys {
             Settings settings = manager->GetSettings();
             bool settingsDirty = false;
 
-            Text("Modifier Key: %s", KeyName(settings.modifierKeyCode).c_str());
+            Text(TR("keybinds.modifier_key"), KeyName(settings.modifierKeyCode).c_str());
             SameLine();
             PushID("ModifierKeyCapture");
             if (RenderCaptureButton(CaptureTarget::kModifierKey, settings.modifierKeyCode) == CaptureResult::kCaptured) {
@@ -2212,7 +2293,7 @@ namespace Hotkeys {
             }
             PopID();
 
-            Text("Gamepad Modifier: %s", KeyName(settings.modifierGamepadCode).c_str());
+            Text(TR("keybinds.gamepad_modifier"), KeyName(settings.modifierGamepadCode).c_str());
             SameLine();
             PushID("GamepadModifierCapture");
             if (RenderCaptureButton(CaptureTarget::kGamepadModifier, settings.modifierGamepadCode) == CaptureResult::kCaptured) {
@@ -2220,12 +2301,12 @@ namespace Hotkeys {
             }
             PopID();
 
-            if (SliderFloat("Hold Threshold (seconds)", &settings.holdThresholdSeconds, 0.1f, 2.0f, "%.2f")) {
+            if (SliderFloat(TR("keybinds.hold_threshold"), &settings.holdThresholdSeconds, 0.1f, 2.0f, "%.2f")) {
                 settingsDirty = true;
             }
             float boundTableWidth = GetItemRectSize().x;
             SameLine();
-            HelpMarker("Hold a key for this long before the action(s) activate.");
+            HelpMarker(TR("keybinds.hold_threshold.tooltip"));
 
             if (settingsDirty) {
                 manager->SetSettings(settings);
@@ -2260,10 +2341,12 @@ namespace Hotkeys {
                             ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit |
                                 ImGuiTableFlags_Sortable | ImGuiTableFlags_SortTristate,
                             ImVec2{boundTableWidth, 0.0f})) {
-                TableSetupColumn("Key", keyColumnFlags, settings.keyBindsKeyColumnWidth);
-                TableSetupColumn("Action", actionColumnFlags, settings.keyBindsActionColumnWidth > 0.0f ? settings.keyBindsActionColumnWidth : 260.0f);
-                TableSetupColumn("Block vanilla hotkey", ImGuiTableColumnFlags_NoSort, settings.keyBindsBlockVanillaColumnWidth);
-                TableSetupColumn("Enabled", ImGuiTableColumnFlags_NoSort, settings.keyBindsEnabledColumnWidth);
+                TableSetupColumn(TR("keybinds.table.key_column"), keyColumnFlags, settings.keyBindsKeyColumnWidth);
+                TableSetupColumn(TR("keybinds.table.action_column"), actionColumnFlags,
+                                  settings.keyBindsActionColumnWidth > 0.0f ? settings.keyBindsActionColumnWidth : 260.0f);
+                TableSetupColumn(TR("keybinds.table.block_vanilla_column"), ImGuiTableColumnFlags_NoSort,
+                                  settings.keyBindsBlockVanillaColumnWidth);
+                TableSetupColumn(TR("keybinds.table.enabled_column"), ImGuiTableColumnFlags_NoSort, settings.keyBindsEnabledColumnWidth);
                 TableHeadersRow();
 
                 auto* sortSpecs = TableGetSortSpecs();
@@ -2294,7 +2377,7 @@ namespace Hotkeys {
                     } else if (spec.ColumnIndex == 1) {
                         auto actionKey = [](const BindSummary& a_summary) -> std::string_view {
                             return a_summary.actions.empty() ? std::string_view{}
-                                                              : std::string_view{kActionTypeDisplayNames[static_cast<int>(a_summary.actions.front().type)]};
+                                                              : std::string_view{ActionTypeDisplayName(a_summary.actions.front().type)};
                         };
                         std::sort(summaries.begin(), summaries.end(), [&](const BindSummary& a_lhs, const BindSummary& a_rhs) {
                             return ascending ? actionKey(a_lhs) < actionKey(a_rhs) : actionKey(a_rhs) < actionKey(a_lhs);
@@ -2309,7 +2392,7 @@ namespace Hotkeys {
                     TableNextColumn();
                     Text("%s", BindKeyLabel(summary.key, settings.modifierKeyCode, settings.modifierGamepadCode).c_str());
                     bool isThisRowEditing = s_keyEditor.active && s_keyEditor.key && *s_keyEditor.key == summary.key;
-                    if (SmallButton(isThisRowEditing ? "Cancel Edit" : "Edit")) {
+                    if (SmallButton(isThisRowEditing ? TR("keybinds.row.cancel_edit") : TR("common.edit"))) {
                         if (isThisRowEditing) {
                             CloseEditors();
                         } else {
@@ -2317,13 +2400,13 @@ namespace Hotkeys {
                         }
                     }
                     SameLine();
-                    if (SmallButton("Delete")) {
+                    if (SmallButton(TR("common.delete"))) {
                         bool wasEditingThisRow = (s_keyEditor.active && s_keyEditor.key && *s_keyEditor.key == summary.key) ||
                                                   (s_actionEditor.active && s_actionEditor.targetKey == summary.key);
                         BindKey deleteKey = summary.key;
-                        RequestConfirm(std::format("Delete the key bind \"{}\" and everything it does? This can't be undone.",
-                                                    BindKeyLabel(summary.key, settings.modifierKeyCode, settings.modifierGamepadCode)),
-                                       "Delete", [manager, deleteKey, wasEditingThisRow]() {
+                        RequestConfirm(TF("keybinds.delete_bind_confirm",
+                                           BindKeyLabel(summary.key, settings.modifierKeyCode, settings.modifierGamepadCode)),
+                                       TR("common.delete"), [manager, deleteKey, wasEditingThisRow]() {
                                            manager->RemoveBind(deleteKey);
                                            MaybeSaveActiveProfile(manager);
                                            if (wasEditingThisRow) {
@@ -2344,7 +2427,7 @@ namespace Hotkeys {
                     bool isAddingToThisRow = s_actionEditor.active && s_actionEditor.targetKey == summary.key && !s_actionEditor.editingExisting;
                     bool showAdd = !anyCopyToActiveOnThisRow && (canAddMore || isAddingToThisRow);
                     if (showAdd) {
-                        if (SmallButton(isAddingToThisRow ? "Cancel Add" : "Add")) {
+                        if (SmallButton(isAddingToThisRow ? TR("keybinds.row.cancel_add") : TR("keybinds.row.add"))) {
                             if (isAddingToThisRow) {
                                 CloseEditors();
                             } else {
@@ -2354,7 +2437,7 @@ namespace Hotkeys {
                     }
 
                     if (summary.actions.empty()) {
-                        TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "(no actions)");
+                        DescText(TR("keybinds.row.no_actions"));
                     } else {
                         for (std::size_t actionIndex = 0; actionIndex < summary.actions.size(); ++actionIndex) {
                             const auto& action = summary.actions[actionIndex];
@@ -2377,9 +2460,9 @@ namespace Hotkeys {
                                 }
 
                                 if (copyTargets.empty()) {
-                                    TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "No other key binds to copy to.");
+                                    DescText(TR("keybinds.row.no_other_binds"));
                                     SameLine();
-                                    if (SmallButton("Cancel")) {
+                                    if (SmallButton(TR("common.cancel"))) {
                                         CloseEditors();
                                     }
                                 } else {
@@ -2393,10 +2476,10 @@ namespace Hotkeys {
                                         copyTargetItems.push_back(label.c_str());
                                     }
                                     SetNextItemWidth(160.0f);
-                                    RenderTypeaheadCombo("Copy To", s_copyTo.selectedTargetIndex, copyTargetItems.data(),
+                                    RenderTypeaheadCombo(TR("keybinds.row.copy_to"), s_copyTo.selectedTargetIndex, copyTargetItems.data(),
                                                           static_cast<int>(copyTargetItems.size()), s_copyTo.typeahead);
                                     SameLine();
-                                    if (SmallButton("Ok")) {
+                                    if (SmallButton(TR("common.ok"))) {
                                         auto fields = ParseFieldString(action.serialized);
                                         if (auto cloned = DeserializeAction(fields)) {
                                             manager->AddOrUpdateAction(copyTargets[s_copyTo.selectedTargetIndex], std::move(cloned));
@@ -2405,12 +2488,12 @@ namespace Hotkeys {
                                         CloseEditors();
                                     }
                                     SameLine();
-                                    if (SmallButton("Cancel")) {
+                                    if (SmallButton(TR("common.cancel"))) {
                                         CloseEditors();
                                     }
                                 }
                             } else {
-                                if (SmallButton("Edit")) {
+                                if (SmallButton(TR("common.edit"))) {
                                     if (isThisActionEditing) {
                                         CloseEditors();
                                     } else {
@@ -2418,32 +2501,32 @@ namespace Hotkeys {
                                     }
                                 }
                                 SameLine();
-                                if (SmallButton("Delete")) {
+                                if (SmallButton(TR("common.delete"))) {
                                     CloseEditors();
                                     BindKey deleteKey = summary.key;
                                     ActionType deleteType = action.type;
-                                    RequestConfirm(std::format("Delete the \"{}\" action from \"{}\"? This can't be undone.",
-                                                                action.displayName, BindKeyLabel(summary.key, settings.modifierKeyCode, settings.modifierGamepadCode)),
-                                                   "Delete", [manager, deleteKey, deleteType]() {
+                                    RequestConfirm(TF("keybinds.delete_action_confirm", action.displayName,
+                                                       BindKeyLabel(summary.key, settings.modifierKeyCode, settings.modifierGamepadCode)),
+                                                   TR("common.delete"), [manager, deleteKey, deleteType]() {
                                                        manager->ClearBindAction(deleteKey, deleteType);
                                                        MaybeSaveActiveProfile(manager);
                                                    });
                                 }
                                 SameLine();
-                                if (SmallButton("Copy To")) {
+                                if (SmallButton(TR("keybinds.row.copy_to"))) {
                                     OpenCopyTo(summary.key, action.type);
                                 }
                                 if (summary.actions.size() > 1) {
                                     SameLine();
                                     BeginDisabled(actionIndex == 0);
-                                    if (SmallButton("Up")) {
+                                    if (SmallButton(TR("common.up"))) {
                                         manager->MoveAction(summary.key, action.type, true);
                                         MaybeSaveActiveProfile(manager);
                                     }
                                     EndDisabled();
                                     SameLine();
                                     BeginDisabled(actionIndex + 1 == summary.actions.size());
-                                    if (SmallButton("Down")) {
+                                    if (SmallButton(TR("common.down"))) {
                                         manager->MoveAction(summary.key, action.type, false);
                                         MaybeSaveActiveProfile(manager);
                                     }
@@ -2473,7 +2556,7 @@ namespace Hotkeys {
                         ImDrawListManager::AddRectFilled(GetWindowDrawList(), toggleMin, toggleMax, IM_COL32(30, 30, 30, 150),
                                                           toggleHeight * 0.5f, 0);
                         if (IsMouseHoveringRect(toggleMin, toggleMax)) {
-                            SetTooltip("Only toggleable if not using a modifier key.");
+                            SetTooltip("%s", TR("keybinds.row.modifier_locked_tooltip"));
                         }
                     }
 
@@ -2522,7 +2605,7 @@ namespace Hotkeys {
             bool actionEditorJustOpened = settings.autoScrollToBottom && s_actionEditor.active && !s_actionEditorWasActive;
 
             if (!s_keyEditor.active && !s_actionEditor.active) {
-                if (Button("+ New Key Bind")) {
+                if (Button(TR("keybinds.new_key_bind"))) {
                     CloseEditors();
                     s_keyEditor = KeyEditState{
                         .active = true,
@@ -2553,7 +2636,7 @@ namespace Hotkeys {
             auto profiles = manager->ListProfiles();
             std::string active = manager->GetActiveProfileName();
 
-            Text("Active Profile: %s", active.c_str());
+            Text(TR("profiles.active_profile"), active.c_str());
             Separator();
 
             float profileListWidth = GetContentRegionAvail().x * 0.5f;
@@ -2565,18 +2648,16 @@ namespace Hotkeys {
                 PopID();
             }
             if (profiles.empty()) {
-                TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "No profiles yet - create one below.");
+                DescText(TR("profiles.no_profiles_yet"));
             }
 
             Separator();
 
-            if (Button("Save")) {
-                RequestConfirm(
-                    std::format("Overwrite the profile \"{}\" with its current key binds? This can't be undone.", active),
-                    "Overwrite", [manager]() { manager->SaveActiveProfile(); });
+            if (Button(TR("common.save"))) {
+                RequestConfirm(TF("profiles.overwrite_confirm", active), TR("common.overwrite"), [manager]() { manager->SaveActiveProfile(); });
             }
             SameLine();
-            if (Button("Delete")) {
+            if (Button(TR("common.delete"))) {
                 manager->DeleteProfile(active);
             }
 
@@ -2584,16 +2665,14 @@ namespace Hotkeys {
 
             static char newProfileName[64] = "";
             SetNextItemWidth(CalcItemWidth() * 0.5f);
-            InputText("New Profile Name", newProfileName, sizeof(newProfileName));
+            InputText(TR("profiles.new_profile_name"), newProfileName, sizeof(newProfileName));
             SameLine();
-            if (Button("Save As New") && newProfileName[0] != '\0') {
+            if (Button(TR("profiles.save_as_new")) && newProfileName[0] != '\0') {
                 std::string requestedName = newProfileName;
                 bool alreadyExists = std::find(profiles.begin(), profiles.end(), requestedName) != profiles.end();
                 if (alreadyExists) {
-                    RequestConfirm(
-                        std::format("A profile named \"{}\" already exists. Overwrite it with the current key binds? This can't be undone.",
-                                    requestedName),
-                        "Overwrite", [manager, requestedName]() { manager->SaveActiveProfileAs(requestedName); });
+                    RequestConfirm(TF("profiles.save_as_new_overwrite_confirm", requestedName), TR("common.overwrite"),
+                                   [manager, requestedName]() { manager->SaveActiveProfileAs(requestedName); });
                 } else {
                     manager->SaveActiveProfileAs(requestedName);
                 }
@@ -2613,7 +2692,7 @@ namespace Hotkeys {
                     profileCycleKeyLabel = std::format("{} + {}", KeyName(globalModifierKeyCode), profileCycleKeyLabel);
                 }
             }
-            Text("Profile-Cycle Key: %s", profileCycleKeyLabel.c_str());
+            Text(TR("profiles.profile_cycle_key"), profileCycleKeyLabel.c_str());
             SameLine();
             PushID("ProfileCycleKeyCapture");
             std::uint32_t capturedCycleKey = profileCycleKeyCode;
@@ -2623,20 +2702,20 @@ namespace Hotkeys {
             }
             if (profileCycleKeyCode != 0 && s_captureTarget != CaptureTarget::kProfileCycleKey) {
                 SameLine();
-                if (Button("Unbind")) {
+                if (Button(TR("common.unbind"))) {
                     manager->SetProfileCycleKey(0, false);
                     MaybeSaveActiveProfile(manager);
                 }
             }
             PopID();
-            if (Checkbox("Requires modifier", &profileCycleRequiresModifier)) {
+            if (Checkbox(TR("keybinds.requires_modifier"), &profileCycleRequiresModifier)) {
                 SetProfileCycleKeyWithConfirm(manager, profileCycleKeyCode, profileCycleRequiresModifier);
             }
             SameLine();
             Settings globalSettings = manager->GetSettings();
             bool isDefault = profileCycleKeyCode != 0 && globalSettings.defaultProfileCycleKeyCode == profileCycleKeyCode &&
                               globalSettings.defaultProfileCycleRequiresModifier == profileCycleRequiresModifier;
-            if (Checkbox("Make default", &isDefault)) {
+            if (Checkbox(TR("profiles.make_default"), &isDefault)) {
                 if (isDefault) {
                     globalSettings.defaultProfileCycleKeyCode = profileCycleKeyCode;
                     globalSettings.defaultProfileCycleRequiresModifier = profileCycleRequiresModifier;
@@ -2646,9 +2725,8 @@ namespace Hotkeys {
                 }
                 manager->SetSettings(globalSettings);
             }
-            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f}, "Cycles through saved profiles without opening this menu.");
-            TextColored(ImVec4{0.7f, 0.7f, 0.7f, 1.0f},
-                        "Make default: newly created profiles (via Save As New) start with this key already set.");
+            DescText(TR("profiles.cycle_tooltip"));
+            DescText(TR("profiles.make_default_tooltip"));
         }
     }
 

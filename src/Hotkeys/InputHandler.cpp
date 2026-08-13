@@ -95,7 +95,7 @@ namespace Hotkeys {
 
         if (settings.modifierKeyCode != 0 && idCode == settings.modifierKeyCode) {
             m_modifierHeld = a_button.IsPressed();
-            return manager->IsSafeToAct();
+            return settings.modifierBlocksVanillaHotkey && manager->IsSafeToAct();
         }
 
         auto cycleKeyCode = manager->GetProfileCycleKeyCode();
@@ -160,15 +160,15 @@ namespace Hotkeys {
 
         if (settings.modifierGamepadCode == GamepadButton::kLeftTrigger && rawCode == GamepadButton::kRawLeftTrigger) {
             m_gamepadModifierHeld = GamepadButton::IsTriggerHeld(a_button);
-            return manager->IsSafeToAct();
+            return settings.modifierBlocksVanillaHotkey && manager->IsSafeToAct();
         }
         if (settings.modifierGamepadCode == GamepadButton::kRightTrigger && rawCode == GamepadButton::kRawRightTrigger) {
             m_gamepadModifierHeld = GamepadButton::IsTriggerHeld(a_button);
-            return manager->IsSafeToAct();
+            return settings.modifierBlocksVanillaHotkey && manager->IsSafeToAct();
         }
         if (auto code = GamepadButton::ToUnifiedCode(a_button); code && *code == settings.modifierGamepadCode) {
             m_gamepadModifierHeld = a_button.IsPressed();
-            return manager->IsSafeToAct();
+            return settings.modifierBlocksVanillaHotkey && manager->IsSafeToAct();
         }
 
         if (auto code = GamepadButton::ToUnifiedCode(a_button)) {

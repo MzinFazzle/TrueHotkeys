@@ -9,11 +9,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <format>
+#include <random>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace Hotkeys {
     namespace {
@@ -40,9 +43,12 @@ namespace Hotkeys {
             return false;
         }
 
-        void GrantIfMissing(RE::Actor* a_actor, RE::TESBoundObject* a_object) {
+        void GrantIfMissing(RE::Actor* a_actor, RE::TESBoundObject* a_object, int a_count = 1) {
+            if (a_count < 1) {
+                a_count = 1;
+            }
             if (!IsOwned(a_actor, a_object)) {
-                a_actor->AddObjectToContainer(a_object, nullptr, 1, nullptr);
+                a_actor->AddObjectToContainer(a_object, nullptr, a_count, nullptr);
             }
         }
 
@@ -164,7 +170,7 @@ namespace Hotkeys {
             if (delta <= 0.0f) {
                 return;
             }
-            a_actor->AsActorValueOwner()->RestoreActorValue(RE::ACTOR_VALUE_MODIFIER::kDamage, chargeAV, delta);
+            a_actor->AsActorValueOwner()->RestoreActorValue(chargeAV, delta);
 
             a_actor->RemoveItem(best->form, 1, RE::ITEM_REMOVE_REASON::kRemove, best->extraList, nullptr);
 
@@ -173,16 +179,16 @@ namespace Hotkeys {
             }
         }
 
-        [[nodiscard]] bool GrantIfAllowed(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool a_addIfMissing) {
+        [[nodiscard]] bool GrantIfAllowed(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool a_addIfMissing, int a_count = 1) {
             if (a_addIfMissing) {
-                GrantIfMissing(a_actor, a_object);
+                GrantIfMissing(a_actor, a_object, a_count);
                 return true;
             }
             return IsOwned(a_actor, a_object);
         }
 
-        void EquipBound(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool a_addIfMissing) {
-            if (!GrantIfAllowed(a_actor, a_object, a_addIfMissing)) {
+        void EquipBound(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool a_addIfMissing, int a_count = 1) {
+            if (!GrantIfAllowed(a_actor, a_object, a_addIfMissing, a_count)) {
                 return;
             }
             if (auto* equipManager = RE::ActorEquipManager::GetSingleton()) {
@@ -576,6 +582,16 @@ namespace Hotkeys {
         return T("common.unknown");
     }
 
+    std::string_view ToString(ConsumableRandomKind a_kind) noexcept {
+        switch (a_kind) {
+            case ConsumableRandomKind::kFood:
+                return "Food";
+            case ConsumableRandomKind::kDrink:
+                return "Drink";
+        }
+        return "Unknown";
+    }
+
 
     std::string WeaponSetAction::GetDisplayName() const {
         std::string name = T("actiontype.weapon.label");
@@ -923,21 +939,102 @@ namespace Hotkeys {
         return std::format("Type:Shout|Form:{}{}", m_shout.ToString(), suffix);
     }
 
+    namespace {
+        [[nodiscard]] bool IsLikelyDrinkName(std::string_view a_name) {
+            static constexpr std::array<std::string_view, 14> kDrinkWords = {
+                "mead", "ale", "wine", "brandy", "cider", "milk", "juice", "skooma",
+                "flin", "sujamma", "shein", "matze", "greef", "cordial",
+            };
+            std::string word;
+            for (std::size_t i = 0; i <= a_name.size(); ++i) {
+                char c = (i < a_name.size()) ? a_name[i] : '\0';
+                if (std::isalnum(static_cast<unsigned char>(c))) {
+                    word += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    continue;
+                }
+                if (!word.empty()) {
+                    for (auto known : kDrinkWords) {
+                        if (word == known) {
+                            return true;
+                        }
+                    }
+                    word.clear();
+                }
+            }
+            return false;
+        }
+
+        [[nodiscard]] std::vector<RE::TESBoundObject*> CollectRandomConsumableCandidates(RE::Actor* a_actor, ConsumableRandomKind a_kind) {
+            std::vector<RE::TESBoundObject*> candidates;
+            if (!a_actor) {
+                return candidates;
+            }
+            auto inventory = a_actor->GetInventory([](RE::TESBoundObject& a_obj) { return a_obj.Is(RE::FormType::AlchemyItem); });
+            for (auto& [item, entry] : inventory) {
+                auto& [count, data] = entry;
+                if (count <= 0) {
+                    continue;
+                }
+                auto* alch = item->As<RE::AlchemyItem>();
+                if (!alch) {
+                    continue;
+                }
+                const char* name = alch->GetName();
+                bool looksLikeDrink = name && IsLikelyDrinkName(name);
+                if (a_kind == ConsumableRandomKind::kDrink) {
+                    if (looksLikeDrink) {
+                        candidates.push_back(item);
+                    }
+                } else if (alch->IsFood() && !looksLikeDrink) {
+                    candidates.push_back(item);
+                }
+            }
+            return candidates;
+        }
+
+        [[nodiscard]] RE::TESBoundObject* PickRandomConsumable(const std::vector<RE::TESBoundObject*>& a_candidates) {
+            if (a_candidates.empty()) {
+                return nullptr;
+            }
+            static std::mt19937 rng{std::random_device{}()};
+            std::uniform_int_distribution<std::size_t> dist(0, a_candidates.size() - 1);
+            return a_candidates[dist(rng)];
+        }
+    }
+
 
     std::string ConsumableAction::GetDisplayName() const {
+        if (m_consumeRandom) {
+            const char* kindKey = m_randomKind == ConsumableRandomKind::kDrink ? "actioneditor.consumable.drink_option"
+                                                                                : "actioneditor.consumable.food_option";
+            return TF("actiontype.consumable.random_display", T(kindKey));
+        }
         std::string suffix = m_addIfMissing ? T("common.grants_missing_suffix") : "";
         return TF("actiontype.consumable.display", m_item.ToDisplayString(), suffix);
     }
 
     void ConsumableAction::Execute(RE::Actor* a_actor) const {
+        if (!a_actor) {
+            return;
+        }
+        if (m_consumeRandom) {
+            auto candidates = CollectRandomConsumableCandidates(a_actor, m_randomKind);
+            if (auto* pick = PickRandomConsumable(candidates)) {
+                EquipBound(a_actor, pick, false);
+            }
+            return;
+        }
         auto* item = m_item.Resolve<RE::TESBoundObject>();
-        if (!item || !a_actor) {
+        if (!item) {
             return;
         }
         EquipBound(a_actor, item, m_addIfMissing);
     }
 
     std::string ConsumableAction::Serialize() const {
+        if (m_consumeRandom) {
+            return std::format("Type:Consumable|ConsumeRandom:1|RandomKind:{}", ToString(m_randomKind));
+        }
         std::string suffix = m_addIfMissing ? "|AddIfMissing:1" : "";
         return std::format("Type:Consumable|Form:{}{}", m_item.ToString(), suffix);
     }
@@ -953,11 +1050,11 @@ namespace Hotkeys {
         if (!ammo || !a_actor) {
             return;
         }
-        EquipBound(a_actor, ammo, m_addIfMissing);
+        EquipBound(a_actor, ammo, m_addIfMissing, m_addCount);
     }
 
     std::string AmmoSwapAction::Serialize() const {
-        std::string suffix = m_addIfMissing ? "|AddIfMissing:1" : "";
+        std::string suffix = m_addIfMissing ? std::format("|AddIfMissing:1|AddCount:{}", m_addCount) : "";
         return std::format("Type:Ammo|Form:{}{}", m_ammo.ToString(), suffix);
     }
 
@@ -1028,6 +1125,7 @@ namespace Hotkeys {
         (void)a_actor;
         SyntheticTap::Queue(SyntheticTap::Kind::kSneak);
     }
+
 
 
     void ToggleAutoMoveAction::Execute(RE::Actor* a_actor) const {
@@ -1319,6 +1417,12 @@ namespace Hotkeys {
             return std::nullopt;
         }
 
+        [[nodiscard]] std::optional<ConsumableRandomKind> ParseConsumableRandomKind(std::string_view a_str) {
+            if (a_str == "Food") return ConsumableRandomKind::kFood;
+            if (a_str == "Drink") return ConsumableRandomKind::kDrink;
+            return std::nullopt;
+        }
+
         [[nodiscard]] const std::string* FindField(const std::unordered_map<std::string, std::string>& a_fields, std::string_view a_key) {
             auto it = a_fields.find(std::string(a_key));
             return it == a_fields.end() ? nullptr : &it->second;
@@ -1454,6 +1558,19 @@ namespace Hotkeys {
         }
 
         if (*type == "Consumable") {
+            bool consumeRandom = false;
+            if (const auto* consumeRandomStr = FindField(a_fields, "ConsumeRandom")) {
+                consumeRandom = (*consumeRandomStr == "1");
+            }
+            if (consumeRandom) {
+                ConsumableRandomKind randomKind = ConsumableRandomKind::kFood;
+                if (const auto* kindStr = FindField(a_fields, "RandomKind")) {
+                    if (auto parsed = ParseConsumableRandomKind(*kindStr)) {
+                        randomKind = *parsed;
+                    }
+                }
+                return std::make_unique<ConsumableAction>(FormRef{}, false, true, randomKind);
+            }
             const auto* formStr = FindField(a_fields, "Form");
             if (!formStr) {
                 return nullptr;
@@ -1482,7 +1599,14 @@ namespace Hotkeys {
             if (const auto* addIfMissingStr = FindField(a_fields, "AddIfMissing")) {
                 addIfMissing = (*addIfMissingStr == "1");
             }
-            return std::make_unique<AmmoSwapAction>(*form, addIfMissing);
+            int addCount = 1;
+            if (const auto* addCountStr = FindField(a_fields, "AddCount")) {
+                addCount = std::atoi(addCountStr->c_str());
+                if (addCount < 1) {
+                    addCount = 1;
+                }
+            }
+            return std::make_unique<AmmoSwapAction>(*form, addIfMissing, addCount);
         }
 
         if (*type == "ToggleTorch") {
@@ -1528,7 +1652,6 @@ namespace Hotkeys {
         if (*type == "ToggleFreeCamPaused") {
             return std::make_unique<ToggleFreeCamPausedAction>();
         }
-
 
         if (*type == "ToggleSprint") {
             return std::make_unique<ToggleSprintAction>();

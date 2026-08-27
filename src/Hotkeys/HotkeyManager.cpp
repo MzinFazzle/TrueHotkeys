@@ -85,6 +85,13 @@ namespace Hotkeys {
                     a_settings.modifierBlocksVanillaHotkey = (value == "1" || value == "true");
                 } else if (key == "Language") {
                     a_settings.language = value;
+                } else if (key == "LastAmmoAddCount") {
+                    a_settings.lastAmmoAddCount = std::atoi(value.c_str());
+                    if (a_settings.lastAmmoAddCount < 1) {
+                        a_settings.lastAmmoAddCount = 1;
+                    }
+                } else if (key == "GamepadPlusPlusCompat") {
+                    a_settings.gamepadPlusPlusCompat = (value == "1" || value == "true");
                 }
             }
         }
@@ -126,6 +133,8 @@ namespace Hotkeys {
             file << "BlockHotkeysInStatsMenu=" << (a_settings.blockHotkeysInStatsMenu ? "1" : "0") << "\n";
             file << "ModifierBlocksVanillaHotkey=" << (a_settings.modifierBlocksVanillaHotkey ? "1" : "0") << "\n";
             file << "Language=" << a_settings.language << "\n";
+            file << "LastAmmoAddCount=" << a_settings.lastAmmoAddCount << "\n";
+            file << "GamepadPlusPlusCompat=" << (a_settings.gamepadPlusPlusCompat ? "1" : "0") << "\n";
         }
     }
 
@@ -288,7 +297,7 @@ namespace Hotkeys {
         return true;
     }
 
-    void HotkeyManager::Notify(std::string_view a_message) const { RE::DebugNotification(std::string(a_message).c_str()); }
+    void HotkeyManager::Notify(std::string_view a_message) const { RE::SendHUDMessage::ShowHUDMessage(std::string(a_message).c_str()); }
 
     void HotkeyManager::TriggerBind(const BindKey& a_key) {
         auto it = m_bindLookup.find(a_key);

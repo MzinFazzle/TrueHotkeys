@@ -93,8 +93,12 @@ namespace Hotkeys {
 
     class ConsumableAction final : public IHotkeyAction {
     public:
-        explicit ConsumableAction(FormRef a_item, bool a_addIfMissing = false) :
-            m_item(std::move(a_item)), m_addIfMissing(a_addIfMissing) {}
+        explicit ConsumableAction(FormRef a_item, bool a_addIfMissing = false, bool a_consumeRandom = false,
+                                   ConsumableRandomKind a_randomKind = ConsumableRandomKind::kFood) :
+            m_item(std::move(a_item)),
+            m_addIfMissing(a_addIfMissing),
+            m_consumeRandom(a_consumeRandom),
+            m_randomKind(a_randomKind) {}
 
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kConsumable; }
         [[nodiscard]] std::string GetDisplayName() const override;
@@ -104,12 +108,14 @@ namespace Hotkeys {
     private:
         FormRef m_item;
         bool m_addIfMissing;
+        bool m_consumeRandom;
+        ConsumableRandomKind m_randomKind;
     };
 
     class AmmoSwapAction final : public IHotkeyAction {
     public:
-        explicit AmmoSwapAction(FormRef a_ammo, bool a_addIfMissing = false) :
-            m_ammo(std::move(a_ammo)), m_addIfMissing(a_addIfMissing) {}
+        explicit AmmoSwapAction(FormRef a_ammo, bool a_addIfMissing = false, int a_addCount = 1) :
+            m_ammo(std::move(a_ammo)), m_addIfMissing(a_addIfMissing), m_addCount(a_addCount) {}
 
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kAmmoSwap; }
         [[nodiscard]] std::string GetDisplayName() const override;
@@ -119,6 +125,7 @@ namespace Hotkeys {
     private:
         FormRef m_ammo;
         bool m_addIfMissing;
+        int m_addCount;
     };
 
     class ToggleTorchAction final : public IHotkeyAction {
@@ -160,6 +167,7 @@ namespace Hotkeys {
         [[nodiscard]] std::string Serialize() const override { return "Type:ToggleSneak"; }
     };
 
+
     class ToggleAutoMoveAction final : public IHotkeyAction {
     public:
         [[nodiscard]] ActionType GetType() const noexcept override { return ActionType::kToggleAutoMove; }
@@ -191,7 +199,6 @@ namespace Hotkeys {
         void Execute(RE::Actor* a_actor) const override;
         [[nodiscard]] std::string Serialize() const override { return "Type:ToggleFreeCamPaused"; }
     };
-
 
     class ToggleSprintAction final : public IHotkeyAction {
     public:

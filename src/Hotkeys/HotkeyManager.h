@@ -51,6 +51,10 @@ namespace Hotkeys {
         bool blockHotkeysInMapMenu = true;
         bool blockHotkeysInStatsMenu = false;
 
+
+        int lastAmmoAddCount = 1;
+
+        bool gamepadPlusPlusCompat = false;
     };
 
     struct ActionSummary {

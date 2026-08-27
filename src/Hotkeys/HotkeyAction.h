@@ -55,10 +55,16 @@ namespace Hotkeys {
         kWaitRest,
     };
 
+    enum class ConsumableRandomKind : std::uint8_t {
+        kFood,
+        kDrink,
+    };
+
     [[nodiscard]] std::string_view ToString(ActionType a_type) noexcept;
     [[nodiscard]] std::string_view ToString(Hand a_hand) noexcept;
     [[nodiscard]] std::string_view ToString(MovementDirection a_direction) noexcept;
     [[nodiscard]] std::string_view ToString(OpenMenuTarget a_target) noexcept;
+    [[nodiscard]] std::string_view ToString(ConsumableRandomKind a_kind) noexcept;
 
     [[nodiscard]] std::string_view ToDisplayString(OpenMenuTarget a_target) noexcept;
 

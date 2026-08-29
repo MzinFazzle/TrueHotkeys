@@ -39,6 +39,12 @@ namespace Hotkeys {
              "When checked, pressing your modifier key/button on its own blocks whatever vanilla action (or other mod's "
              "menu) it's normally bound to, so it never leaks through while being held as a modifier here. Still lets menus "
              "that want the button for themselves (like the Wait/Sleep duration slider on RB/LB) use it normally."},
+            {"settings.gamepad_plus_plus.header", "Gamepad++ Compatibility"},
+            {"settings.gamepad_plus_plus_compat", "Gamepad++ compatibility"},
+            {"settings.gamepad_plus_plus_compat.tooltip",
+             "When checked, a gamepad button press is skipped entirely by True Hotkeys (and never blocks vanilla) whenever "
+             "one of Gamepad++'s own combo buttons is also currently held, so Gamepad++ can reliably see it. Requires "
+             "assigning Gamepad++'s combo button to something other than this mod's own gamepad modifier."},
             {"settings.language.label", "Language"},
             {"settings.language.tooltip", "Changes the language of this config UI. Drop a new Languages/<Name>.ini file next "
                                            "to English.ini to add one - see English.ini itself for the format."},
@@ -123,7 +129,13 @@ namespace Hotkeys {
             {"actioneditor.spell.dual_cast_tooltip", "Pick the same spell for both hands to dual-cast it."},
             {"actioneditor.shout.label", "Shout"},
             {"actioneditor.consumable.label", "Item"},
+            {"actioneditor.consumable.consume_random", "Consume random"},
+            {"actioneditor.consumable.food_option", "Food"},
+            {"actioneditor.consumable.drink_option", "Drink"},
+            {"actioneditor.consumable.consume_random_tooltip",
+             "Picks a random matching item from your inventory instead of the one selected above. Drink is a best-effort guess (Skyrim has no built-in food/drink distinction) - an unusually-named modded beverage may not be recognized."},
             {"actioneditor.ammoswap.label", "Ammo"},
+            {"actioneditor.ammo.add_count", "Quantity to grant"},
             {"actioneditor.toggletorch.label", "Torch"},
 
             {"actioneditor.togglepov.desc", "Switches between 1st and 3rd person view."},
@@ -267,6 +279,7 @@ namespace Hotkeys {
 
             {"actiontype.shout.display", "Shout: {}{}"},
             {"actiontype.consumable.display", "Use: {}{}"},
+            {"actiontype.consumable.random_display", "Consumable: Random {}"},
             {"actiontype.ammo.display", "Ammo: {}{}"},
             {"actiontype.toggle_torch.display", "Toggle Torch: {}{}"},
 

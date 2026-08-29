@@ -36,6 +36,7 @@ namespace Hotkeys {
             bool holdFired = false;             // Hold already triggered for this press
             bool modifierHeldAtPress = false;   // snapshot so releasing the modifier mid-hold doesn't change the outcome
             bool isMovementBind = false;
+            bool gamepadPlusPlusStandDown = false;
         };
 
         [[nodiscard]] bool HandleKeyEvent(std::uint32_t a_idCode, bool a_isDown, bool a_isPressed, float a_heldDuration, const Settings& a_settings, bool a_modifierHeld);
@@ -44,6 +45,8 @@ namespace Hotkeys {
                                                     const Settings& a_settings);
 
         [[nodiscard]] bool IsGamepadCaptureDebounced() const;
+
+        [[nodiscard]] bool IsGamepadPlusPlusAnchorHeld(std::uint32_t a_excludeIdCode) const;
 
         bool m_modifierHeld = false;
         bool m_gamepadModifierHeld = false;

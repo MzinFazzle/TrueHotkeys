@@ -1,4 +1,4 @@
-# True Hotkeys (v1.3.10)
+# True Hotkeys (v1.3.22)
 
 An SKSE plugin that turns your keyboard or gamepad into a real hotkey 
 system for weapons, spells, shouts, outfits, and more. Configured entirely in-game.

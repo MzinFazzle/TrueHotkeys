@@ -1,11 +1,35 @@
 #include "Hotkeys/InputHandler.h"
 
 #include "Hotkeys/ConfigUI.h"
+#include "Hotkeys/FormRef.h"
 #include "Hotkeys/GamepadButtons.h"
+
+#include <array>
 
 namespace Hotkeys {
     namespace {
         constexpr std::chrono::milliseconds kGamepadCaptureDebounce{200};
+
+        [[nodiscard]] const std::array<RE::TESGlobal*, 4>& GamepadPlusPlusComboGlobals() {
+            static const std::array<RE::TESGlobal*, 4> cached = [] {
+                constexpr std::array<std::uint32_t, 4> kLocalFormIDs = {0x801, 0x802, 0x803, 0x804};
+                std::array<RE::TESGlobal*, 4> result{};
+                for (std::size_t i = 0; i < kLocalFormIDs.size(); ++i) {
+                    result[i] = FormRef{"Gamepad++.esp", kLocalFormIDs[i]}.Resolve<RE::TESGlobal>();
+                }
+                return result;
+            }();
+            return cached;
+        }
+
+        [[nodiscard]] std::optional<std::uint32_t> CkGamepadCodeToUnifiedCode(int a_ckCode) {
+            constexpr int kFirstCkCode = 266;
+            constexpr int kLastCkCode = 281;
+            if (a_ckCode < kFirstCkCode || a_ckCode > kLastCkCode) {
+                return std::nullopt;
+            }
+            return GamepadButton::kBase + static_cast<std::uint32_t>(a_ckCode - kFirstCkCode);
+        }
     }
 
     InputHandler* InputHandler::GetSingleton() {
@@ -39,6 +63,23 @@ namespace Hotkeys {
 
     bool InputHandler::IsGamepadCaptureDebounced() const {
         return (std::chrono::steady_clock::now() - m_gamepadCaptureStartTime) < kGamepadCaptureDebounce;
+    }
+
+    bool InputHandler::IsGamepadPlusPlusAnchorHeld(std::uint32_t a_excludeIdCode) const {
+        for (auto* global : GamepadPlusPlusComboGlobals()) {
+            if (!global) {
+                continue;  // Gamepad++.esp not installed, or this specific global doesn't exist
+            }
+            auto ckCode = static_cast<int>(global->value);
+            auto unifiedCode = CkGamepadCodeToUnifiedCode(ckCode);
+            if (!unifiedCode || *unifiedCode == a_excludeIdCode) {
+                continue;
+            }
+            if (m_pressStates.contains(*unifiedCode)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     void InputHandler::ReportExternalCapture(std::uint32_t a_idCode) {
@@ -205,28 +246,37 @@ namespace Hotkeys {
         if (a_isDown) {
             state.holdFired = false;
             state.modifierHeldAtPress = a_modifierHeld;
+            state.gamepadPlusPlusStandDown =
+                a_settings.gamepadPlusPlusCompat && GamepadButton::IsGamepadCode(a_idCode) && IsGamepadPlusPlusAnchorHeld(a_idCode);
             state.isMovementBind = manager->IsMovementBind(a_idCode, state.modifierHeldAtPress);
-            if (state.isMovementBind) {
+            if (state.isMovementBind && !state.gamepadPlusPlusStandDown) {
                 manager->TriggerMovement(a_idCode, state.modifierHeldAtPress, true);
             }
         } else if (a_isPressed) {
-            if (!state.isMovementBind && !state.holdFired && a_heldDuration >= a_settings.holdThresholdSeconds &&
+            if (!state.isMovementBind && !state.holdFired && !state.gamepadPlusPlusStandDown && a_heldDuration >= a_settings.holdThresholdSeconds &&
                 manager->HasBind(BindKey{a_idCode, state.modifierHeldAtPress, PressType::kHold})) {
                 state.holdFired = true;
                 manager->TriggerBind(BindKey{a_idCode, state.modifierHeldAtPress, PressType::kHold});
             }
         } else {
             if (state.isMovementBind) {
-                manager->TriggerMovement(a_idCode, state.modifierHeldAtPress, false);
-            } else if (!state.holdFired) {
+                if (!state.gamepadPlusPlusStandDown) {
+                    manager->TriggerMovement(a_idCode, state.modifierHeldAtPress, false);
+                }
+            } else if (!state.holdFired && !state.gamepadPlusPlusStandDown) {
                 manager->TriggerBind(BindKey{a_idCode, state.modifierHeldAtPress, PressType::kTap});
             }
         }
 
         bool modifierHeldForGesture = state.modifierHeldAtPress;
+        bool standDownForGesture = state.gamepadPlusPlusStandDown;
 
         if (!a_isDown && !a_isPressed) {
             m_pressStates.erase(a_idCode);
+        }
+
+        if (standDownForGesture) {
+            return false;
         }
 
         return manager->ShouldBlockVanillaForKeyAndModifier(a_idCode, modifierHeldForGesture);

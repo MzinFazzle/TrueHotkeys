@@ -173,7 +173,7 @@ namespace Hotkeys {
             a_actor->AsActorValueOwner()->RestoreActorValue(chargeAV, delta);
 
             a_actor->RemoveItem(best->form, 1, RE::ITEM_REMOVE_REASON::kRemove, best->extraList, nullptr);
-
+            
             if (a_notify) {
                 HotkeyManager::GetSingleton()->Notify(TF("actiontype.recharge.notify_message", weapon->GetName(), best->form->GetName()));
             }

@@ -50,10 +50,10 @@ namespace Hotkeys {
         constexpr const char* kActionTypeDisplayKeys[] = {
             "actiontype.weapon",       "actiontype.ammo",      "actiontype.spell",       "actiontype.shout",
             "actiontype.outfit",       "actiontype.consumable", "actiontype.unequip",     "actiontype.movement",
-            "actiontype.ready_sheath", "actiontype.jump",      "actiontype.toggle_sneak", "actiontype.toggle_sprint",
-            "actiontype.toggle_auto_move", "actiontype.toggle_torch", "actiontype.toggle_pov", "actiontype.toggle_freecam",
-            "actiontype.toggle_freecam_paused", "actiontype.toggle_menus", "actiontype.open_menu", "actiontype.quick_save",
-            "actiontype.quick_load",   "actiontype.recharge_weapon", "actiontype.recharge_weapon_left_hand"};
+            "actiontype.ready_sheath", "actiontype.jump",      "actiontype.toggle_sneak",
+            "actiontype.toggle_sprint", "actiontype.toggle_auto_move", "actiontype.toggle_torch", "actiontype.toggle_pov",
+            "actiontype.toggle_freecam", "actiontype.toggle_freecam_paused", "actiontype.toggle_menus", "actiontype.open_menu",
+            "actiontype.quick_save", "actiontype.quick_load", "actiontype.recharge_weapon", "actiontype.recharge_weapon_left_hand"};
         constexpr int kActionTypeCount = 23;
 
         [[nodiscard]] const char* ActionTypeDisplayName(ActionType a_type) { return TR(kActionTypeDisplayKeys[static_cast<int>(a_type)]); }
@@ -1010,6 +1010,9 @@ namespace Hotkeys {
             bool rechargePreferSmaller = true;
             int rechargeMaxSize = 5;
             bool rechargeNotify = false;
+            int ammoAddCount = 1;
+            bool consumeRandom = false;
+            int consumeRandomKindIndex = 0;
         };
         ActionEditState s_actionEditor;
 
@@ -1464,6 +1467,15 @@ namespace Hotkeys {
                     }
                     break;
                 case ActionType::kConsumable:
+                    if (auto it0 = fields.find("ConsumeRandom"); it0 != fields.end() && it0->second == "1") {
+                        s_actionEditor.consumeRandom = true;
+                        s_actionEditor.consumeRandomKindIndex = 0;
+                        if (auto itKind = fields.find("RandomKind"); itKind != fields.end() && itKind->second == "Drink") {
+                            s_actionEditor.consumeRandomKindIndex = 1;
+                        }
+                        break;
+                    }
+                    s_actionEditor.consumeRandom = false;
                     if (auto it = fields.find("Form"); it != fields.end()) {
                         PreFillPicker(s_actionEditor.consumablePicker, FormBrowser::GetConsumableCatalog, it->second);
                     }
@@ -1477,6 +1489,13 @@ namespace Hotkeys {
                     }
                     if (auto it2 = fields.find("AddIfMissing"); it2 != fields.end()) {
                         s_actionEditor.addIfMissing = (it2->second == "1");
+                    }
+                    s_actionEditor.ammoAddCount = 1;
+                    if (auto it3 = fields.find("AddCount"); it3 != fields.end()) {
+                        s_actionEditor.ammoAddCount = std::atoi(it3->second.c_str());
+                        if (s_actionEditor.ammoAddCount < 1) {
+                            s_actionEditor.ammoAddCount = 1;
+                        }
                     }
                     break;
                 case ActionType::kToggleTorch:
@@ -1564,6 +1583,7 @@ namespace Hotkeys {
                 .fromPlugins = false,
                 .editingExisting = false,
             };
+            s_actionEditor.ammoAddCount = HotkeyManager::GetSingleton()->GetSettings().lastAmmoAddCount;
         }
 
         void OpenActionEditorForEdit(const BindSummary& a_summary, const ActionSummary& a_action) {
@@ -1685,7 +1705,8 @@ namespace Hotkeys {
             if (s_actionEditor.actionType != ActionType::kPanic && s_actionEditor.actionType != ActionType::kTogglePOV &&
                 s_actionEditor.actionType != ActionType::kMovement && s_actionEditor.actionType != ActionType::kOpenMenu &&
                 s_actionEditor.actionType != ActionType::kReadySheath &&
-                s_actionEditor.actionType != ActionType::kToggleSneak && s_actionEditor.actionType != ActionType::kToggleAutoMove &&
+                s_actionEditor.actionType != ActionType::kToggleSneak &&
+                s_actionEditor.actionType != ActionType::kToggleAutoMove &&
                 s_actionEditor.actionType != ActionType::kJump && s_actionEditor.actionType != ActionType::kToggleFreeCam &&
                 s_actionEditor.actionType != ActionType::kToggleFreeCamPaused &&
                 s_actionEditor.actionType != ActionType::kToggleSprint &&
@@ -1700,15 +1721,25 @@ namespace Hotkeys {
             if (s_actionEditor.actionType != ActionType::kPanic && s_actionEditor.actionType != ActionType::kTogglePOV &&
                 s_actionEditor.actionType != ActionType::kMovement && s_actionEditor.actionType != ActionType::kOpenMenu &&
                 s_actionEditor.actionType != ActionType::kReadySheath &&
-                s_actionEditor.actionType != ActionType::kToggleSneak && s_actionEditor.actionType != ActionType::kToggleAutoMove &&
+                s_actionEditor.actionType != ActionType::kToggleSneak &&
+                s_actionEditor.actionType != ActionType::kToggleAutoMove &&
                 s_actionEditor.actionType != ActionType::kJump && s_actionEditor.actionType != ActionType::kToggleFreeCam &&
                 s_actionEditor.actionType != ActionType::kToggleFreeCamPaused &&
                 s_actionEditor.actionType != ActionType::kToggleSprint &&
                 s_actionEditor.actionType != ActionType::kQuickSave && s_actionEditor.actionType != ActionType::kQuickLoad &&
                 s_actionEditor.actionType != ActionType::kToggleMenus && s_actionEditor.actionType != ActionType::kRechargeWeapon &&
-                s_actionEditor.actionType != ActionType::kRechargeWeaponLeftHand) {
+                s_actionEditor.actionType != ActionType::kRechargeWeaponLeftHand &&
+                !(s_actionEditor.actionType == ActionType::kConsumable && s_actionEditor.consumeRandom)) {
                 SameLine();
                 Checkbox(TR("actioneditor.add_if_missing"), &s_actionEditor.addIfMissing);
+                if (s_actionEditor.actionType == ActionType::kAmmoSwap && s_actionEditor.addIfMissing) {
+                    SameLine();
+                    SetNextItemWidth(140.0f);
+                    InputInt(TR("actioneditor.ammo.add_count"), &s_actionEditor.ammoAddCount);
+                    if (s_actionEditor.ammoAddCount < 1) {
+                        s_actionEditor.ammoAddCount = 1;
+                    }
+                }
             }
 
             std::vector<ActionType> existingTypes;
@@ -1849,8 +1880,19 @@ namespace Hotkeys {
                     break;
                 case ActionType::kConsumable:
                     Text("%s", TR("actioneditor.consumable.label"));
+                    BeginDisabled(s_actionEditor.consumeRandom);
                     RenderFieldPicker("ConsumableForm", s_actionEditor.consumablePicker, ConsumableCatalogFor(s_actionEditor.fromPlugins),
                                       ActionTypeDisplayName(selectedType), flat, FormSortKind::kGeneric, 0.75f);
+                    EndDisabled();
+                    Checkbox(TR("actioneditor.consumable.consume_random"), &s_actionEditor.consumeRandom);
+                    if (s_actionEditor.consumeRandom) {
+                        const char* consumeRandomKindNames[] = {TR("actioneditor.consumable.food_option"),
+                                                                 TR("actioneditor.consumable.drink_option")};
+                        for (int i = 0; i < 2; ++i) {
+                            RadioButton(consumeRandomKindNames[i], &s_actionEditor.consumeRandomKindIndex, i);
+                        }
+                        DescText(TR("actioneditor.consumable.consume_random_tooltip"));
+                    }
                     break;
                 case ActionType::kAmmoSwap:
                     Text("%s", TR("actioneditor.ammoswap.label"));
@@ -2091,6 +2133,13 @@ namespace Hotkeys {
                         break;
                     }
                     case ActionType::kConsumable: {
+                        if (s_actionEditor.consumeRandom) {
+                            fields["ConsumeRandom"] = "1";
+                            fields["RandomKind"] =
+                                std::string(ToString(s_actionEditor.consumeRandomKindIndex == 1 ? ConsumableRandomKind::kDrink
+                                                                                                 : ConsumableRandomKind::kFood));
+                            break;
+                        }
                         auto item = PickedFormRef(s_actionEditor.consumablePicker);
                         if (!item) {
                             s_actionEditor.errorMessage = TR("actioneditor.error.pick_item");
@@ -2113,6 +2162,7 @@ namespace Hotkeys {
                         fields["Form"] = ammo->ToString();
                         if (s_actionEditor.addIfMissing) {
                             fields["AddIfMissing"] = "1";
+                            fields["AddCount"] = std::to_string(s_actionEditor.ammoAddCount);
                         }
                         break;
                     }
@@ -2184,6 +2234,13 @@ namespace Hotkeys {
                         }
                         manager->AddOrUpdateAction(s_actionEditor.targetKey, std::move(action));
                         MaybeSaveActiveProfile(manager);
+                        if (selectedType == ActionType::kAmmoSwap && s_actionEditor.addIfMissing) {
+                            auto settings = manager->GetSettings();
+                            if (settings.lastAmmoAddCount != s_actionEditor.ammoAddCount) {
+                                settings.lastAmmoAddCount = s_actionEditor.ammoAddCount;
+                                manager->SetSettings(settings);
+                            }
+                        }
                         CloseEditors();
                         return;
                     }
@@ -2257,6 +2314,12 @@ namespace Hotkeys {
                 settingsDirty = true;
             }
             DescText(TR("settings.modifier_blocks_vanilla_hotkey.tooltip"));
+
+            SeparatorText(TR("settings.gamepad_plus_plus.header"));
+            if (Checkbox(TR("settings.gamepad_plus_plus_compat"), &settings.gamepadPlusPlusCompat)) {
+                settingsDirty = true;
+            }
+            DescText(TR("settings.gamepad_plus_plus_compat.tooltip"));
 
             auto* locale = Locale::GetSingleton();
             SeparatorText(TR("settings.language.label"));
